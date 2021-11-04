@@ -1,0 +1,1 @@
+web: gunicorn akira.wsgi --log-file -
