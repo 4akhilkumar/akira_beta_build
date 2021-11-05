@@ -40,16 +40,17 @@ def user_login(request):
         BLOCKED_IPS.append(i.black_list)
 
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    ip = ""
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
+        ip = x_forwarded_for.split(',')[-1].strip()
+    elif request.META.get('HTTP_X_REAL_IP'):
+        ip = request.META.get('HTTP_X_REAL_IP')
     else:
         ip = request.META.get('REMOTE_ADDR')
     if ip in BLOCKED_IPS:
         return http.HttpResponseForbidden('<h1>Forbidden</h1>')
     else:
         current_time = pydt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        error_message = ""
-        success_message = ""
         if request.method == 'POST':
             username = request.POST.get('username')
 
