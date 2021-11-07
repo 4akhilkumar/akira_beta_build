@@ -77,6 +77,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'akira_apps.authentication.middleware.filter_ip_middleware.FilterIPMiddleware',
+    'akira_apps.authentication.middleware.reCaptcha_middleware.RecaptchaMiddleware',
 ]
 
 ROOT_URLCONF = 'akira.urls'
