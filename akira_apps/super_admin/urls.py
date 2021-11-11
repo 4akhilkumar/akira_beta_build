@@ -10,4 +10,5 @@ urlpatterns = [
     path('manage_staff/', views.manage_staff, name = 'manage_staff'),
     path('view_staff/<staff_id>/', views.view_staff, name = 'view_staff'),
     path('user_group/<staff_id>/', views.user_group, name = 'user_group'),
+    path('user_login_details_csv/', views.user_login_details_csv, name = 'user_login_details_csv'),
 ]

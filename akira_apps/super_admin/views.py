@@ -12,6 +12,8 @@ from akira_apps.staff.models import Staffs
 from akira_apps.authentication.forms import CreateUserForm
 
 import secrets
+import csv, io
+import datetime as pydt
 
 from akira_apps.super_admin.decorators import allowed_users
 
@@ -143,6 +145,20 @@ def user_group(request, staff_id):
         return redirect('manage_staff')
     else:
         return redirect('manage_staff')
+
+def user_login_details_csv(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename=user_login_details' + \
+        str(pydt.datetime.now()) + '.csv'
+
+    writer = csv.writer(response)
+    writer.writerow(['user', 'user_ip_address', 'os_details', 'browser_details', 'status', 'attempt', 'created_at'])
+    
+    userLoginDetails = UserLoginDetails.objects.all()
+
+    for i in userLoginDetails:
+        writer.writerow([i.user, i.user_ip_address, i.os_details, i.browser_details, i.status, i.attempt, i.created_at])
+    return response
 
 
 # group_name = 'Student'
