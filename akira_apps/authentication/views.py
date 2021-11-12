@@ -156,7 +156,7 @@ def user_login(request):
                             return redirect('login')
                     else:
                         messages.info(request, 'You account has been disabled temporarily')
-                        return redirect('login')
+                        return redirect('verify_its_you', username=custom_encrypted_username)
                 else:
                     messages.error(request, 'No such account exist!')
                     if username in list_existing_user_records:
