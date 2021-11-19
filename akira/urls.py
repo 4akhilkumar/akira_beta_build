@@ -26,7 +26,7 @@ from django.views.decorators.cache import never_cache
 from ckeditor_uploader import views as ckeditor_views
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # path('admin/', admin.site.urls),
     path('', include('akira_apps.authentication.urls')),
     path('super_admin/', include('akira_apps.super_admin.urls')),
     path('staff/', include('akira_apps.staff.urls')),
