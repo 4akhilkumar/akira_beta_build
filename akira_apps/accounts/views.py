@@ -10,7 +10,7 @@ import datetime as pydt
 import datetime
 
 from akira_apps.accounts.models import TwoFactorAuth
-from akira_apps.authentication.models import User_BackUp_Codes, User_IP_B_List, UserLoginDetails
+from akira_apps.authentication.models import User_BackUp_Codes, User_IP_S_List, UserLoginDetails
 
 # Create your views here.
 @login_required(login_url=settings.LOGIN_URL)
@@ -78,9 +78,9 @@ def account_settings(request):
         attempt_on_that_date = UserLoginDetails.objects.filter(user__username = username, attempt = 'Failed', created_at__range=(start_date,end_date)).count()
         failed_attempts_date.append(attempt_on_that_date)
 
-    get_failed_login_attempts = UserLoginDetails.objects.filter(user__username = username, attempt = 'Failed')
-    get_failed_attempt_in_a_month = UserLoginDetails.objects.filter(user = username, attempt = 'Failed', user_confirm = 'Pending', created_at__range=(start_month,end_month)).count()
-    get_failed_login_attempts_count = UserLoginDetails.objects.filter(user__username = username, attempt = 'Failed').count()
+    get_failed_login_attempts = UserLoginDetails.objects.filter(user__username = username, attempt = "Failed")
+    get_failed_attempt_in_a_month = UserLoginDetails.objects.filter(user = username, attempt = "Failed", user_confirm = 'Pending', created_at__range=(start_month,end_month)).count()
+    get_failed_login_attempts_count = UserLoginDetails.objects.filter(user__username = username, attempt = "Failed").count()
         
     context = {
         "backup_codes_status":backup_codes_status,
@@ -216,43 +216,9 @@ def deny_login_attempt(request, login_attempt_id):
         update_login_confirm.user_confirm = "NO"
         update_login_confirm.save()
         messages.success(request, "Login Activity Confirmed!")
-        block_ip = User_IP_B_List(black_list=spam_ip_address)
-        block_ip.save()
+        # suspicious_ip = User_IP_S_List(suspicious_list=spam_ip_address)
+        # suspicious_ip.save()
         return redirect('account_settings')
     else:
         messages.warning(request, "Access Denied!")
         return redirect('account_settings')
-
-# backUpCode = TwoFactorAuth.objects.all()
-# TwoFactorAuth.objects.all().delete()
-# backUpCode = TwoFactorAuth.objects.all()
-# print(backUpCode)
-
-# current_user = '4akhi'
-
-# start_month = pydt.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-# nxt_mnth = start_month.replace(day=28) + datetime.timedelta(days=4)
-# res = nxt_mnth - datetime.timedelta(days=nxt_mnth.day)
-# end_month = pydt.datetime.now().replace(day=res.day, hour=0, minute=0, second=0, microsecond=0)
-
-# get_failed_attempt = UserLoginDetails.objects.filter(user__username = current_user, attempt = 'Success', created_at__range=(start_month,end_month)).count()
-# print("Failed Attempts",get_failed_attempt)
-# print()
-# get_success_attempt_count = UserLoginDetails.objects.filter(user__username = current_user, attempt = 'Success', created_at__range=(start_month,end_month)).count()
-# print("Successful Attempts",get_success_attempt_count)
-
-# get_success_attempt = UserLoginDetails.objects.filter(user__username = current_user, attempt = 'Success', created_at__range=(start_month,end_month))
-
-# get_dates = []
-# for i in get_success_attempt:
-#     get_dates.append(i.created_at.strftime("%d"))
-# removed_duplicate_date = list(sorted(set(get_dates)))
-
-# attempts_date = []
-# for i in removed_duplicate_date:
-#     start_date = pydt.datetime.now().replace(day=int(i), hour=0, minute=0, second=0, microsecond=0)
-#     end_date = pydt.datetime.now().replace(day=int(i), hour=23, minute=59, second=59, microsecond=0)
-#     attempt_on_that_date = UserLoginDetails.objects.filter(user__username = current_user, attempt = 'Success', created_at__range=(start_date,end_date)).count()
-#     attempts_date.append(attempt_on_that_date)
-#     print("On date",i,"No.of attempts",attempt_on_that_date)
-# print(attempts_date)
