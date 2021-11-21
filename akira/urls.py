@@ -40,3 +40,8 @@ urlpatterns = [
 
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root':settings.MEDIA_ROOT}),
 ]
+
+handler400 = "akira_apps.authentication.views.handler400"
+handler403 = "akira_apps.authentication.views.handler403"
+handler404 = "akira_apps.authentication.views.handler404"
+handler500 = "akira_apps.authentication.views.handler500"
