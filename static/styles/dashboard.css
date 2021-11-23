@@ -91,12 +91,14 @@ body {
 ::-webkit-scrollbar {
   width: 16px;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #888;
   border: 4px solid rgba(0, 0, 0, 0);
   background-clip: padding-box;
   border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #555; 
   border: 4px solid rgba(0, 0, 0, 0);
@@ -762,7 +764,6 @@ main {
   font-size: .875rem;
   font-weight: 500;
   line-height: 1.25rem;
-
   border-radius: .4rem;
 }
 
@@ -941,6 +942,10 @@ input:checked + .slider:before {
   row-gap: 2rem;
 }
 
+.show-details-login-info {
+  display: none;
+}
+
 .each-login-details {
   display: flex;
   align-items: center;
@@ -1030,6 +1035,23 @@ input:checked + .slider:before {
 .confirmed-button {
   background: #0f9d5833;
   color: #12d576;
+}
+
+#loadMore {
+  outline: none;
+  border: 2px solid #77aaff;
+  cursor: pointer;
+  padding: .6rem;
+  letter-spacing: .01785714em;
+  font-size: .875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  border-radius: .4rem;
+  align-items: center;
+  column-gap: .4rem;
+  width: fit-content;
+  background: #4285f433;
+  color: #77aaff;
 }
 
 @media only screen and (max-width: 378px) {
@@ -1132,8 +1154,6 @@ input:checked + .slider:before {
 }
 
 #myTopButton:hover {
-  color: #202124;
-  background: rgba(95,99,104,.04);
   color: var(--topButton-color);
   background: var(--topButton-bg-color);
 }
