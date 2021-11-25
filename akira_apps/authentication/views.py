@@ -111,6 +111,7 @@ def user_login(request):
                         if i.suspicious_list == user_ip_address:
                             user.is_active = False
                             user.save()
+                            save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", "User login from suspicious IP Address")
                     if user.is_active == True:
                         if checkKeyEncrypted is True:
                             user = authenticate(request, username=username, password=password)
