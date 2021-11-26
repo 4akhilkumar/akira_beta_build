@@ -24,6 +24,8 @@ from django.contrib.auth.decorators import login_required
 from django.urls.conf import re_path
 from django.views.decorators.cache import never_cache
 from ckeditor_uploader import views as ckeditor_views
+from django.views.generic.base import TemplateView
+
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
@@ -37,6 +39,9 @@ urlpatterns = [
     # path('ckeditor/', include('ckeditor_uploader.urls')),
     path('ckeditor/upload/', login_required(ckeditor_views.upload), name='ckeditor_upload'),
     path('ckeditor/browse/', never_cache(login_required(ckeditor_views.browse)), name='ckeditor_browse'),
+
+    path("robots.txt",TemplateView.as_view(template_name="robots.txt", content_type="text/plain")),
+    path('sitemap.xml',TemplateView.as_view(template_name="sitemap.xml", content_type="application/xml")),
 
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root':settings.MEDIA_ROOT}),
 ]
