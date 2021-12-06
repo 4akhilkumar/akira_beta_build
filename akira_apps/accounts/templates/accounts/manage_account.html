@@ -34,7 +34,7 @@
   {% for group_for in request.user.groups.all %}
   {% if group_for.name == 'Head of the Department' or group_for.name == 'Administrator' %}
   <li>
-      <a href="">
+      <a href="{% url 'manage_staff' %}">
           <span class="fas fa-chalkboard-teacher"></span>
           <span>Faculty</span>
       </a>
@@ -230,9 +230,11 @@
                         </div>
                     </div>
                 </div>
+                {% if thisDeviceCurrent == True %}
                 <div class="login-attempt-action">
                     <button class="confirmed-button"><span class="fas fa-check-circle"></span> This Device</button>
                 </div>
+                {% endif %}
             </div>
             {% if get_PreviousLoginInfo %}
             <div class="each-login-details">
@@ -264,6 +266,11 @@
                         </div>
                     </div>
                 </div>
+                {% if thisDevicePrevious == True %}
+                <div class="login-attempt-action">
+                    <button class="confirmed-button"><span class="fas fa-check-circle"></span> This Device</button>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
         </div>
@@ -321,7 +328,9 @@
                 </div>
             </div>
             {% endfor %}
+            {% if get_failed_login_attempts_count > 3 %}
             <button href="#" id="loadMore"><i class="fa-solid fa-spinner"></i> Load More</button>
+            {% endif %}
         </div>
         {% else %}
         <p>Hurray! No security activity or alerts in the last 28 days. Everything is Safe&#44 Secure &amp; Clean</p>
@@ -397,13 +406,6 @@
             }
         });
     });
-    $(document).ready(function() {
-        $('input[name="toggle-checkbox"]').click(function(){
-            if($(this).prop("checked") == false){
-                window.location.reload();
-            }
-        });
-    });
 </script>
 <script>
     $( document ).ready(function () {
@@ -422,6 +424,5 @@
           }, 100);
         });
     });
-</script>
 </script>
 {% endblock %}
