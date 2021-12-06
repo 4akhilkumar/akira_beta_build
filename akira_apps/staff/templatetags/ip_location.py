@@ -10,11 +10,9 @@ def ip_location(value):
         url = 'https://ipapi.co/{}/json/'.format(value)
         response = requests.get(url)
         data = response.json()
-        if data['error'] == True or data['error'] or data['reserved']:
-            if data['ip'] == '127.0.0.1':
+        if (data['ip'] == '127.0.0.1'):
+            if (data['error'] == True) or (data['reserved'] == True):
                 city_region_country = 'Localhost'
-            else:
-                city_region_country = 'Unknown'
         else:
             city_region_country = data['city'] + ', ' + data['region'] + ', ' + data['country']
         return city_region_country
