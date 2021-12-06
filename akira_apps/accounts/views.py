@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.auth.models import User
 from django.http.response import HttpResponse
 from django.shortcuts import redirect, render
 from django.contrib.auth.decorators import login_required
@@ -103,12 +104,6 @@ def account_settings(request):
     
     if UserLoginDetails.objects.filter(user__username = username).count() > 2:
         get_PreviousLoginInfo = UserLoginDetails.objects.filter(user__username = username, attempt="Success").order_by('-created_at')[1]
-        if get_currentLoginInfo.user_ip_address == ip and \
-            get_currentLoginInfo.browser_details == browser and \
-            get_currentLoginInfo.os_details == OS_Details:
-            thisDevicePrevious = True
-        else:
-            thisDevicePrevious = False
     else:
         get_PreviousLoginInfo = 0
     
@@ -132,7 +127,6 @@ def account_settings(request):
         "get_currentLoginInfo":get_currentLoginInfo,
         "get_PreviousLoginInfo":get_PreviousLoginInfo,
         "thisDeviceCurrent":thisDeviceCurrent,
-        "thisDevicePrevious":thisDevicePrevious,
     }
     return render(request, 'accounts/manage_account.html', context)
 
@@ -263,3 +257,43 @@ def deny_login_attempt(request, login_attempt_id):
     else:
         messages.warning(request, "Access Denied!")
         return redirect('account_settings')
+
+# backUpCode = TwoFactorAuth.objects.all()
+# User_IP_S_List.objects.all().delete()
+# backUpCode = User_IP_S_List.objects.all()
+# print(backUpCode)
+
+# getUserLoginDetails = UserLoginDetails.objects.filter(user=None)
+# getUserLoginDetails.delete()
+
+# getUserLoginDetails = UserLoginDetails.objects.get(id="189a459b-8d2d-4cc0-bc3c-273a47fcf76a")
+# getUserLoginDetails.delete()
+
+# current_user = '4akhi'
+
+# start_month = pydt.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+# nxt_mnth = start_month.replace(day=28) + datetime.timedelta(days=4)
+# res = nxt_mnth - datetime.timedelta(days=nxt_mnth.day)
+# end_month = pydt.datetime.now().replace(day=res.day, hour=0, minute=0, second=0, microsecond=0)
+
+# get_failed_attempt = UserLoginDetails.objects.filter(user__username = current_user, attempt = 'Success', created_at__range=(start_month,end_month)).count()
+# print("Failed Attempts",get_failed_attempt)
+# print()
+# get_success_attempt_count = UserLoginDetails.objects.filter(user__username = current_user, attempt = 'Success', created_at__range=(start_month,end_month)).count()
+# print("Successful Attempts",get_success_attempt_count)
+
+# get_success_attempt = UserLoginDetails.objects.filter(user__username = current_user, attempt = 'Success', created_at__range=(start_month,end_month))
+
+# get_dates = []
+# for i in get_success_attempt:
+#     get_dates.append(i.created_at.strftime("%d"))
+# removed_duplicate_date = list(sorted(set(get_dates)))
+
+# attempts_date = []
+# for i in removed_duplicate_date:
+#     start_date = pydt.datetime.now().replace(day=int(i), hour=0, minute=0, second=0, microsecond=0)
+#     end_date = pydt.datetime.now().replace(day=int(i), hour=23, minute=59, second=59, microsecond=0)
+#     attempt_on_that_date = UserLoginDetails.objects.filter(user__username = current_user, attempt = 'Success', created_at__range=(start_date,end_date)).count()
+#     attempts_date.append(attempt_on_that_date)
+#     print("On date",i,"No.of attempts",attempt_on_that_date)
+# print(attempts_date)
