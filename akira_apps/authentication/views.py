@@ -739,6 +739,3 @@ def handler500(request, template_name='authentication/ErrorHandler.html'):
         "status_code":500
     }
     return render(request, 'authentication/ErrorHandler.html', context)
-
-def google811aabb091a1da8a(request):
-    return render(request, 'authentication/google811aabb091a1da8a.html')
