@@ -6,7 +6,6 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#317EFB"/>
-    <meta name="google-site-verification" content="EXhdBzGaMsBcnkhYEbtp9ztAhQWut5QKH3N0eFHsabA" />
     <meta name="description" content="AkirA is a kind of Learning Mangement System which can be accessible in all your devices Android, iOS, and desktop devices.">
     
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -113,7 +112,7 @@
                 <div class="toggle-password fa-solid fa-eye"><i class=""></i></div>
             </div>
             
-            <div class="g-recaptcha" data-sitekey="6LfmDxMdAAAAACs6hML3Ev6wOrB18ZkXSPjNWEvL" data-callback="enablebutton"></div>
+            <div class="g-recaptcha" data-sitekey="{{ GOOGLE_RECAPTCHA_PUBLIC_KEY }}"></div>
             <button type="submit" class="button app-login-button" id="id_submit">
                 <i class="fas fa-sign-in-alt"></i> Login
             </button>
@@ -121,7 +120,7 @@
     
         <div class="text-center">
             <a href="{% url 'reset_password' %}" class="text link"><i class="fab fa-keycdn"></i> Forgot Password&quest;</a>
-            <a href="#" class="text link"><i class="far fa-question-circle"></i> Help Center</a>
+            <a href="{% url 'requestSwitchDevice' %}" class="text link"><i class="fa-solid fa-laptop-code"></i> Switch Device</a>
         </div>
     </div>
 </body>

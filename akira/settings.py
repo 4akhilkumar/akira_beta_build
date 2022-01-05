@@ -62,7 +62,11 @@ INSTALLED_APPS = [
     'akira_apps.student.apps.StudentConfig',
     'akira_apps.authentication.apps.AuthenticationConfig',
     'akira_apps.academic_registration.apps.AcademicRegistrationConfig',
+    'akira_apps.academic.apps.AcademicConfig',
     'akira_apps.accounts.apps.AccountsConfig',
+    'akira_apps.course.apps.CourseConfig',
+    'akira_apps.specialization.apps.SpecializationConfig',
+    'akira_apps.shigen.apps.ShigenConfig',
 
     'ckeditor',
     'ckeditor_uploader',
@@ -78,7 +82,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'akira_apps.authentication.middleware.filter_ip_middleware.FilterIPMiddleware',
-    'akira_apps.authentication.middleware.reCaptcha_middleware.RecaptchaMiddleware',
+    'akira_apps.authentication.middleware.userPageTracking_middleware.userPageTrackingMiddleware',
 ]
 
 ROOT_URLCONF = 'akira.urls'
@@ -192,9 +196,12 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE= True
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_AGE = 14400
 PASSWORD_RESET_TIMEOUT_DAYS = 0.00694444
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = True
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# SECURE_SSL_REDIRECT = True
+# CSRF_COOKIE_SECURE = True
+# SECURE_HSTS_SECONDS = 31536000
+# SECURE_HSTS_PRELOAD = True
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
-RECAPTCHA_PUBLIC_KEY = config('RECAPTCHA_PUBLIC_KEY')
-RECAPTCHA_PRIVATE_KEY = config('RECAPTCHA_PRIVATE_KEY')
-RECAPTCHA_REQUIRED_SCORE = config('RECAPTCHA_REQUIRED_SCORE', cast=float)
+GOOGLE_RECAPTCHA_PUBLIC_KEY = config('GOOGLE_RECAPTCHA_PUBLIC_KEY')
+GOOGLE_RECAPTCHA_SECRET_KEY = config('GOOGLE_RECAPTCHA_SECRET_KEY')

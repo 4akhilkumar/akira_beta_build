@@ -1,0 +1,191 @@
+{% extends 'side_panel-navbar_dashboard.html' %}
+{% load static %}
+{% load first_letter_word %}
+
+{% block content %}
+
+{% block analytics-text %}
+<h1>Manage Courses</h1>
+<p>Display analytics about your Courses <span class="fas fa-chart-line"></span> </p>
+{% endblock %}
+
+{% block analytic-overview %}
+<section>
+  <h3 class="section-head">Overview</h3>
+</section>
+<div class="analytics">
+  <div class="analytic">
+      <div class="analytic-icon">
+          <span class="fas fa-chalkboard-teacher"></span>
+      </div>
+      <div class="analytic-info">
+          <h4>Most Reg. Course</h4>
+          <h1>--</h1>
+      </div>
+  </div>
+  <div class="analytic">
+    <div class="analytic-icon">
+        <span class="fas fa-user-graduate"></span>
+    </div>
+    <div class="analytic-info">
+        <h4>Least Reg. Course</h4>
+        <h1>--</h1>
+    </div>
+  </div>
+  <div class="analytic">
+      <div class="analytic-icon">
+          <span class="fas fa-book"></span>
+      </div>
+      <div class="analytic-info">
+          <h4>Total Courses</h4>
+          <h1>{{ courses|length }} <small class="text-success">1% <i class="fa-solid fa-arrow-trend-up"></i></small></h1>
+      </div>
+  </div>
+  <div class="analytic">
+    <div class="analytic-icon">
+        <span class="fas fa-swatchbook"></span>
+    </div>
+    <div class="analytic-info">
+        <h4>Specializations</h4>
+        <h1>{{ specializations|length }} <small class="text-danger">0% <i class="fa-solid fa-arrow-trend-down"></i></small></h1>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block manage-courses %}
+
+<div class="search-box-container">
+  <form action="{% url 'search_course' %}" method="POST" class="form-elements">
+    {% csrf_token %}
+    <input type="text" name="search" id="search-bar" placeholder="Search course..." autocomplete="off" required>
+    <button type="submit" class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></button>
+  </form>
+</div>
+
+<div class="course-container">
+  <ul class="courses">
+    <li class="courses_item">
+      <div class="course">
+        <div class="course_image">
+          <span id="showFormCreateCourse" class="fa-solid fa-circle-plus"></span>
+          /
+          <span class="fa-solid fa-file-csv"></span>
+        </div>
+        <div class="course_content">
+          <h2 class="course_title">Create a Course</h2>
+          <p class="course_text">A course is a unit of teaching that typically lasts one academic term</p>
+        </div>
+      </div>
+    </li>
+    {% for i in courses %}
+    <li class="courses_item">
+      <div class="course">
+        <div class="course_image">
+          <h1 class="course-short_title">{{ i.course_code }} <sub class="custom_sub">{{ i.course_name|first_letter_word }}</sub> </h1>
+        </div>
+        <div class="course_content">
+          <h2 class="course_title">{{ i.course_name }}</h2>
+          <p class="course_text">{{ i.course_desc }}</p>
+          <div class="course-buttons">
+            <button class="readMoreCoursebtn course_btn" onclick="document.location='{% url 'view_course' i.course_code %}'" >Read More</button>
+            <!-- <button class="enrollCoursebtn course_btn">Enroll</button> -->
+          </div>
+        </div>  
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div id="myModal" class="modal">
+  <div class="model-container">
+    <div class="modal-content">
+      <span id="close-model" class="close">&times;</span>
+      <form action="{% url 'create_course_save' %}" method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <label for="id_course_code">Course Code</label> 
+        <input type="text" name="course_code" maxlength="100" value="19CS1900P" id="id_course_code" required>
+        <br>
+        <label for="id_course_name">Course Name</label>
+        <input type="text" name="course_name" maxlength="100" value="Analysis & Design Alogorithm" id="id_course_name" required>
+        <br>
+        <label for="id_course_short_info">Course Short Info</label>
+        <textarea name="course_short_info" cols="40" rows="10" maxlength="500" id="id_course_short_info" required>
+          Lorem ipsum, dolor sit amet consectetur adipisicing elit. Iusto, facilis.
+        </textarea>
+        <br>
+        <label for="id_course_wywl">What you will learn</label>
+        <textarea name="course_wywl" cols="40" rows="10" maxlength="500" id="id_course_wywl" required>
+          Lorem ipsum, dolor sit amet consectetur adipisicing elit. Iusto, facilis.
+        </textarea>
+        <br>
+        <label for="id_course_sywg">Skill You Will Gain</label>
+        <textarea name="course_sywg" cols="40" rows="10" maxlength="500" id="id_course_sywg" required>
+          Lorem ipsum, dolor sit amet consectetur adipisicing elit. Iusto, facilis.
+        </textarea>
+        <br>
+        <label for="id_course_desc">Course Description</label>
+        <textarea name="course_desc" cols="40" rows="10" maxlength="500" id="id_course_desc" required>
+          Lorem ipsum, dolor sit amet consectetur adipisicing elit. Iusto, facilis. Lorem ipsum, dolor sit amet consectetur adipisicing elit. Iusto, facilis.
+        </textarea>
+        <br>
+        <label for="id_course_coordinator">Course Co-Ordinator</label>
+        <select name="course_coordinator" id="id_course_coordinator" required>
+          {% for i in faculty_list %}
+          <option value="{{ i.id }}"> {{ i }} </option>
+          {% endfor %}
+        </select>
+        <br>
+        <label for="id_branch">Branch</label>
+        <select name="branch" id="id_branch" required>
+          {% for x,y in branch_list.fields.branch.choices %}
+            <option value="{{ x }}" selected>{{ y }}</option>
+          {% endfor %}
+        </select>
+        <br>
+        <label for="id_semester">Semester</label>
+        <select name="semester" id="id_semester" required>
+          {% for i in semester_list %}
+          <option value="{{ i.id }}"> {{ i }} </option>
+          {% endfor %}
+        </select>
+        <br>
+        <label for="id_specialization">Semester</label>
+        <select name="specialization" id="id_specialization" required>
+          {% for i in specializations %}
+          <option value="{{ i.id }}"> {{ i }} </option>
+          {% endfor %}
+        </select>
+        <br>
+        <label for="Upload Files">Upload Files</label>
+        <input type="file" name="course_files" id="id_course_files" multiple>
+        <input type="submit">
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  var modal = document.getElementById("myModal");
+  var btn = document.getElementById("showFormCreateCourse");
+  var span = document.getElementById("close-model");
+  
+  btn.onclick = function() {
+    modal.style.display = "block";
+  }
+  
+  span.onclick = function() {
+    modal.style.display = "none";
+  }
+  
+  window.onclick = function(event) {
+    if (event.target == modal) {
+      modal.style.display = "none";
+    }
+  }
+</script>
+
+{% endblock %}
+
+{% endblock %}

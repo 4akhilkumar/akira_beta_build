@@ -34,7 +34,11 @@ urlpatterns = [
     path('staff/', include('akira_apps.staff.urls')),
     path('student/', include('akira_apps.student.urls')),
     path('academic_registration/', include('akira_apps.academic_registration.urls')),
+    path('academic/', include('akira_apps.academic.urls')),
     path('accounts/', include('akira_apps.accounts.urls')),
+    path('course/', include('akira_apps.course.urls')),
+    path('specialization/', include('akira_apps.specialization.urls')),
+    path('shigen/', include('akira_apps.shigen.urls')),
 
     # path('ckeditor/', include('ckeditor_uploader.urls')),
     path('ckeditor/upload/', login_required(ckeditor_views.upload), name='ckeditor_upload'),
@@ -45,8 +49,3 @@ urlpatterns = [
 
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root':settings.MEDIA_ROOT}),
 ]
-
-handler400 = "akira_apps.authentication.views.handler400"
-handler403 = "akira_apps.authentication.views.handler403"
-handler404 = "akira_apps.authentication.views.handler404"
-handler500 = "akira_apps.authentication.views.handler500"

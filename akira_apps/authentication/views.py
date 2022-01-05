@@ -1,20 +1,18 @@
-from django.http.response import HttpResponse
+from decimal import Context
+from django.http.response import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.core.mail import send_mail, EmailMessage
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django import http
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.encoding import force_bytes, force_text  
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.contrib import messages
-
-from akira_apps.accounts.models import TwoFactorAuth
-from akira_apps.authentication.token import account_activation_token
-
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 
 import datetime as pydt
 import re
@@ -23,187 +21,199 @@ import json
 import requests
 
 from akira_apps.super_admin.decorators import unauthenticated_user
-
-from . models import User_BackUp_Codes, User_BackUp_Codes_Login_Attempts, User_IP_S_List, UserLoginDetails, User_IP_B_List
+from akira_apps.accounts.models import TwoFactorAuth
+from akira_apps.authentication.token import account_activation_token
+from . models import (User_BackUp_Codes, User_BackUp_Codes_Login_Attempts, User_IP_S_List, UserLoginDetails, User_IP_B_List, SwitchDevice, UserPageVisits)
 
 from akira_apps.staff.urls import *
 from akira_apps.super_admin.urls import *
 from akira_apps.academic_registration.urls import *
 
+# UserLoginDetails.objects.filter(user_ip_address='128.0.0.1').delete()
 @unauthenticated_user
 def user_login(request):
-    BLOCKED_IPS = []
-    get_black_list_ip = User_IP_B_List.objects.all()
-    for i in get_black_list_ip:
-        BLOCKED_IPS.append(i.black_list)
-
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
+        # ip = '128.0.0.1'
     else:
         ip = request.META.get('REMOTE_ADDR')
-    if ip in BLOCKED_IPS:
-        return http.HttpResponseForbidden('<h1>Forbidden</h1>')
-    else:
-        current_time = pydt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        if request.method == 'POST':
-            username = request.POST.get('username')
+        # ip = '128.0.0.1'
+    current_time = pydt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if request.method == 'POST':
+        username = request.POST.get('username')
 
-            ASCII_Username = []
-            for i in range(len(username)):
-                ASCII_Username.append(ord(username[i]))
-            ASCII_Username_Sum = sum(ASCII_Username)
+        custom_encrypted_username = ""
+        for i in range(len(username)):
+            custom_encrypted_username += chr(ord(username[i]) + 468)
 
-            encrypted_username = ""
-            for i in range(len(username)):
-                encrypted_username += chr(ord(username[i]) + ASCII_Username_Sum)
+        ep = request.POST.get('password')
 
-            custom_encrypted_username = ""
-            for i in range(len(username)):
-                custom_encrypted_username += chr(ord(username[i]) + 468)
+        try:
+            # url = 'https://salty-earth-61106.herokuapp.com/getMetaData/{}/{}/'.format(username, ep)
+            url = 'https://akira-rest-api.herokuapp.com/getMetaData/{}/{}/?format=json'.format(username, ep)
+            response = requests.get(url)
+            data = response.json()
+            print(data)
+        except Exception as e:
+            if "Failed to establish a new connection" in str(e):
+                messages.info(request, "Server under maintenance. Please try again later.")
+                return redirect('login')
 
-            ep = request.POST.get('reCaptchaVerification')
-            afterRAN = re.sub('[0-9a-zA-Z]+', '', ep)
+        user_ip_address = ip
 
-            List1 = list(afterRAN)
-            List2 = list(encrypted_username)
-            checkKeyEncrypted =  any(item in List1 for item in List2)
-
-            l_rot = 0
-            r_rot = len(username)
-            temp = (l_rot - r_rot) % len(afterRAN) 
-            encrypted_password = afterRAN[temp : ] + afterRAN[ : temp]
-
-            password = ""
-            de_key_length = len(encrypted_password) - len(username)
-            for i in range(de_key_length):
-                password += chr(ord(encrypted_password[i]) - ASCII_Username_Sum)
-
-            user_ip_address = ip
-
+        try:
             captcha_token=request.POST.get("g-recaptcha-response")
             cap_url="https://www.google.com/recaptcha/api/siteverify"
-            cap_secret="6LfmDxMdAAAAAI9NEfnM3BUqHfF-zAMLLJOwSRw8"
+            cap_secret=settings.GOOGLE_RECAPTCHA_SECRET_KEY
             cap_data={"secret":cap_secret,"response":captcha_token}
             cap_server_response=requests.post(url=cap_url,data=cap_data)
             cap_json=json.loads(cap_server_response.text)
+        except Exception:
+            messages.info(request, 'Check your internet connection')
+            return redirect('login')
 
-            try:
-                checkUserExists = User.objects.get(username=username)
-            except User.DoesNotExist:
-                checkUserExists = None
-            
-            if cap_json['success'] == True:
-                if checkUserExists:
-                    user = User.objects.get(username = username)
-                    try:
-                        status_2fa = TwoFactorAuth.objects.get(user__username=username)
-                    except TwoFactorAuth.DoesNotExist:
-                        status_2fa = None
-                    if (status_2fa != None) and (status_2fa.twofa == 0):
-                        current_user_2fa_status = 0
-                    elif (status_2fa != None) and (status_2fa.twofa == 1):
-                        current_user_2fa_status = 1
-                    else:
-                        current_user_2fa_status = 0
-                    getSuspiciousIPAddress = User_IP_S_List.objects.all()
-                    for i in getSuspiciousIPAddress:
-                        if i.suspicious_list == user_ip_address:
-                            user.is_active = False
-                            user.save()
-                            save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", "User login from suspicious IP Address")
-                    if user.is_active == True:
-                        if checkKeyEncrypted is True:
-                            user = authenticate(request, username=username, password=password)
-                            if user is not None:
-                                save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", None)
-                                dataset_UserLoginDetails = UserLoginDetails.objects.filter(user__username=username).count()
-                                if dataset_UserLoginDetails > 6:
-                                    verify_login(request, username, current_time, user)
-                                    if current_user_2fa_status == 1:
-                                        user.is_active = False
-                                        user.save()
-                                        return redirect('twofa_verify_its_you', username=custom_encrypted_username)
-                                    else:
-                                        return redirect('login')
-                                elif dataset_UserLoginDetails > 0 and dataset_UserLoginDetails <= 6:
-                                    current_userFailedAttempts_count = UserLoginDetails.objects.filter(user__username=username, attempt="Failed").count()
-                                    current_userFailedAttempts = UserLoginDetails.objects.filter(user__username=username, attempt="Failed").order_by('-created_at')
-                                    twenty_four_hrs = pydt.datetime.now() - pydt.timedelta(days=1)
-                                    failedLoginAttemptsFromIPCount = UserLoginDetails.objects.filter(user_ip_address = ip, attempt="Failed", created_at__gte=twenty_four_hrs).count()
-                                    if (current_user_2fa_status == 0) and ((failedLoginAttemptsFromIPCount < 5) and ((current_userFailedAttempts_count < 5) or (current_userFailedAttempts[0].attempt == "Success"))):
-                                        current_userlogindetailsObject = UserLoginDetails.objects.filter(user__username=username, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
-                                        get_current_userlogindetailsObject_Id = UserLoginDetails.objects.get(id=current_userlogindetailsObject.id)
-                                        get_current_userlogindetailsObject_Id.attempt = "Success"
-                                        get_current_userlogindetailsObject_Id.save()
-                                        
-                                        login(request, user)
-                                        group = None
-                                        if request.user.groups.exists():
-                                            group = request.user.groups.all()[0].name
-                                        if group == 'Student':
-                                            if (request.GET.get('next')):
-                                                return redirect(request.GET.get('next'))
-                                            else:
-                                                return redirect('student_dashboard')
-                                        elif group == 'Staff':
-                                            if (request.GET.get('next')):
-                                                return redirect(request.GET.get('next'))
-                                            else: 
-                                                return redirect('staff_dashboard')
-                                        elif group == 'Head of the Department':
-                                            if (request.GET.get('next')):
-                                                return redirect(request.GET.get('next'))
-                                            else: 
-                                                return redirect('hod_dashboard')
-                                        elif group == 'Course Co-Ordinator':
-                                            if (request.GET.get('next')):
-                                                return redirect(request.GET.get('next'))
-                                            else: 
-                                                return redirect('cc_dashboard')
-                                        elif group == 'Administrator':
-                                            if (request.GET.get('next')):
-                                                return redirect(request.GET.get('next'))
-                                            else:
-                                                return redirect('super_admin_dashboard')
-                                    elif current_user_2fa_status == 1:
-                                        user.is_active = False
-                                        user.save()
-                                        return redirect('twofa_verify_its_you', username=custom_encrypted_username)
-                                    else:
-                                        user.is_active = False
-                                        user.save()
-                                        return redirect('verify_its_you', username=custom_encrypted_username)
+        try:
+            checkUserExists = User.objects.get(username=username)
+        except User.DoesNotExist:
+            checkUserExists = None
+        
+        if cap_json['success'] == True:
+            if checkUserExists:
+                user = User.objects.get(username = username)
+                try:
+                    status_2fa = TwoFactorAuth.objects.get(user__username=username)
+                except TwoFactorAuth.DoesNotExist:
+                    status_2fa = None
+                if (status_2fa != None) and (status_2fa.twofa == 0):
+                    current_user_2fa_status = 0
+                elif (status_2fa != None) and (status_2fa.twofa == 1):
+                    current_user_2fa_status = 1
+                else:
+                    current_user_2fa_status = 0
+                getSuspiciousIPAddress = User_IP_S_List.objects.all()
+                for i in getSuspiciousIPAddress:
+                    if i.suspicious_list == user_ip_address:
+                        user.is_active = False
+                        user.save()
+                        save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", "User login from suspicious IP Address")
+                if user.is_active == True:
+                    if data['checkKeyEncrypted'] is True:
+                        user = authenticate(request, username=username, password=data['MetaKey'])
+                        if user is not None:
+                            save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", None)
+                            dataset_UserLoginDetails = UserLoginDetails.objects.filter(user__username=username).count()
+                            if dataset_UserLoginDetails > 2:
+                                verify_login(request, username, current_time, user)
+                                if current_user_2fa_status == 1:
+                                    user.is_active = False
+                                    user.save()
+                                    return redirect('twofa_verify_its_you', username=custom_encrypted_username)
+                                try:
+                                    get_attempt_MCR = UserLoginDetails.objects.get(
+                                                        user__username=user, 
+                                                        attempt="Manual Confirmation Required",
+                                                        reason = "Login is unusual",
+                                                        user_confirm = "Pending due to unusual login")
+                                except UserLoginDetails.DoesNotExist:
+                                    get_attempt_MCR = None
+                                if get_attempt_MCR:
+                                    return redirect('confirmUserLogin', username=username)
+                                else:
+                                    return redirect('login')
+                            elif dataset_UserLoginDetails < 3:
+                                current_userFailedAttempts_count = UserLoginDetails.objects.filter(user__username=username, attempt="Failed").count()
+                                current_userFailedAttempts = UserLoginDetails.objects.filter(user__username=username, attempt="Failed").order_by('-created_at')
+                                twenty_four_hrs = pydt.datetime.now() - pydt.timedelta(days=1)
+                                failedLoginAttemptsFromIPCount = UserLoginDetails.objects.filter(user_ip_address = ip, attempt="Failed", created_at__gte=twenty_four_hrs).count()
+                                if (current_user_2fa_status == 0) and ((failedLoginAttemptsFromIPCount < 5) and ((current_userFailedAttempts_count < 5) or (current_userFailedAttempts[0].attempt == "Success"))):
+                                    current_userlogindetailsObject = UserLoginDetails.objects.filter(user__username=username, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
+                                    get_current_userlogindetailsObject_Id = UserLoginDetails.objects.get(id=current_userlogindetailsObject.id)
+                                    get_current_userlogindetailsObject_Id.attempt = "Success"
+                                    get_current_userlogindetailsObject_Id.save()
+                                    
+                                    login(request, user)
+                                    group = None
+                                    if request.user.groups.exists():
+                                        group = request.user.groups.all()[0].name
+                                    if group == 'Student':
+                                        if (request.GET.get('next')):
+                                            return redirect(request.GET.get('next'))
+                                        else:
+                                            return redirect('student_dashboard')
+                                    elif group == 'Assistant Professor':
+                                        if (request.GET.get('next')):
+                                            return redirect(request.GET.get('next'))
+                                        else: 
+                                            return redirect('staff_dashboard')
+                                    elif group == 'Associate Professor':
+                                        if (request.GET.get('next')):
+                                            return redirect(request.GET.get('next'))
+                                        else: 
+                                            return redirect('staff_dashboard')
+                                    elif group == 'Professor':
+                                        if (request.GET.get('next')):
+                                            return redirect(request.GET.get('next'))
+                                        else: 
+                                            return redirect('staff_dashboard')
+                                    elif group == 'Head of the Department':
+                                        if (request.GET.get('next')):
+                                            return redirect(request.GET.get('next'))
+                                        else: 
+                                            return redirect('hod_dashboard')
+                                    elif group == 'Course Co-Ordinator':
+                                        if (request.GET.get('next')):
+                                            return redirect(request.GET.get('next'))
+                                        else: 
+                                            return redirect('staff_dashboard')
+                                    elif group == 'Administrator':
+                                        if (request.GET.get('next')):
+                                            return redirect(request.GET.get('next'))
+                                        else:
+                                            return redirect('super_admin_dashboard')
+                                elif current_user_2fa_status == 1:
+                                    user.is_active = False
+                                    user.save()
+                                    return redirect('twofa_verify_its_you', username=custom_encrypted_username)
                                 else:
                                     user.is_active = False
                                     user.save()
                                     return redirect('verify_its_you', username=custom_encrypted_username)
                             else:
-                                messages.warning(request, 'Username or Password is Incorrect!')
-                                save_login_details(request, username, user_ip_address, "Failed", "Username or Password is Incorrect!")
-                                detect_spam_login(request, username, user_ip_address)
-                                return redirect('login')
+                                user.is_active = False
+                                user.save()
+                                return redirect('verify_its_you', username=custom_encrypted_username)
                         else:
-                            messages.warning(request, 'Connection is NOT secured!')
+                            messages.warning(request, 'Username or Password is Incorrect!')
+                            save_login_details(request, username, user_ip_address, "Failed", "Username or Password is Incorrect!")
                             return redirect('login')
                     else:
-                        messages.info(request, 'You account has been disabled temporarily')
-                        return redirect('verify_its_you', username=custom_encrypted_username)
+                        messages.warning(request, 'Connection is NOT secured!')
+                        if checkUserExists:
+                            save_login_details(request, username, user_ip_address, "Failed", "Connection is NOT secured")
+                            detect_spam_login(request, username, user_ip_address)
+                        else:
+                            save_login_details(request, None, user_ip_address, "Failed", "Connection is NOT secured")
+                            detect_spam_login(request, None, user_ip_address)
+                        return redirect('login')
                 else:
-                    messages.warning(request, 'No such account exist!')
-                    save_login_details(request, None, user_ip_address, "Failed", "No such account exist!")
-                    detect_spam_login(request, None, user_ip_address)
-                    return redirect('login')
+                    messages.info(request, 'You account has been disabled temporarily')
+                    return redirect('verify_its_you', username=custom_encrypted_username)
             else:
-                messages.error(request, 'Invalid Captcha try again!')
-                if checkUserExists:
-                    save_login_details(request, username, user_ip_address, "Failed", "Invalid Captcha try again!")
-                    detect_spam_login(request, username, user_ip_address)
-                else:
-                    save_login_details(request, None, user_ip_address, "Failed", "Invalid Captcha try again!")
-                    detect_spam_login(request, None, user_ip_address)
+                messages.warning(request, 'No such account exist!')
+                save_login_details(request, None, user_ip_address, "Failed", "No such account exist!")
                 return redirect('login')
-        return render(request, 'authentication/login.html')
+        else:
+            messages.error(request, 'Invalid Captcha try again!')
+            if checkUserExists:
+                save_login_details(request, username, user_ip_address, "Failed", "Invalid Captcha try again!")
+            else:
+                save_login_details(request, None, user_ip_address, "Failed", "Invalid Captcha try again!")
+            return redirect('login')
+    context = {
+        "GOOGLE_RECAPTCHA_PUBLIC_KEY":settings.GOOGLE_RECAPTCHA_PUBLIC_KEY,
+    }
+    return render(request, 'authentication/login.html', context)
 
 def save_login_details(request, user_name, user_ip_address, attempt, reason):
     user_agent = request.META['HTTP_USER_AGENT']
@@ -216,25 +226,29 @@ def save_login_details(request, user_name, user_ip_address, attempt, reason):
     res = re.findall(r'\(.*?\)', user_agent)
     OS_Details = res[0][1:-1]
     if user_name == None:
-        sld = UserLoginDetails(user_ip_address=user_ip_address, os_details=OS_Details, browser_details=browser, attempt=attempt, reason=reason)
-        sld.save()
+        UserLoginDetails.objects.create(user_ip_address=user_ip_address, os_details=OS_Details, browser_details=browser, attempt=attempt, reason=reason)
     else:
         uid = User.objects.get(username=user_name)
         try:
-            sld = UserLoginDetails(user_ip_address=user_ip_address, user=uid, os_details=OS_Details, browser_details=browser, attempt=attempt)
-            sld.save()
+            UserLoginDetails.objects.create(user_ip_address=user_ip_address, user=uid, os_details=OS_Details, browser_details=browser, attempt=attempt, reason=reason)
         except Exception as e:
             return e
 
+# UserLoginDetails.objects.last().delete()
+# print(UserLoginDetails.objects.all().count())
 def verify_login(request, uid, current_time, user):
     current_uld = UserLoginDetails.objects.filter(user__username = uid)
+    old_uld_7 = UserLoginDetails.objects.filter(created_at__lte = pydt.datetime.now() - pydt.timedelta(days=7)).count()
     last_current_uld = UserLoginDetails.objects.filter(user__username = uid).order_by('-created_at')
     current_user = User.objects.get(username=uid)
     list_current_uld_ipa = []
     list_current_uld_osd = []
     list_current_uld_bd = []
-
-    for i in range(len(current_uld)-1):
+    if len(current_uld) > old_uld_7:
+        n = len(current_uld) - old_uld_7
+    else:
+        n = 0
+    for i in range(n,len(current_uld)-1):
         list_current_uld_ipa.append(current_uld[i].user_ip_address)
         list_current_uld_osd.append(current_uld[i].os_details)
         list_current_uld_bd.append(current_uld[i].browser_details)
@@ -274,13 +288,14 @@ def verify_login(request, uid, current_time, user):
         update_attempt_ncy.save()
         return redirect('login')
     elif(count>=4 and count<=20) and current_user_2fa_status == 0:
-        login(request, user)
         get_attempt_ncy = UserLoginDetails.objects.filter(user__username=user, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
         update_attempt_ncy = UserLoginDetails.objects.get(id=get_attempt_ncy.id)
         update_attempt_ncy.score = count
-        update_attempt_ncy.attempt = "Success"
-        update_attempt_ncy.reason = str(count)
+        update_attempt_ncy.attempt = "Manual Confirmation Required"
+        update_attempt_ncy.reason = "Login is unusual"
+        update_attempt_ncy.user_confirm = "Pending due to unusual login"
         update_attempt_ncy.save()
+        current_site = get_current_site(request)
         context = {
             "first_name":current_user.first_name,
             "email":current_user.email,
@@ -288,12 +303,21 @@ def verify_login(request, uid, current_time, user):
             "os_details":os_details,
             "browser_details":browser_details,
             "current_time":current_time,
+            "username":current_user,
+            "domain": current_site.domain,
         }
         template = render_to_string('authentication/login_alert_email.html', context)
         try:
             send_mail('Akira Account Login Alert', template, settings.EMAIL_HOST_USER, [current_user.email], html_message=template)
-        except Exception as e:
-            messages.warning(request, e)
+            messages.info(request, "Please check your email inbox")
+        except Exception:
+            deleteLoginDetails = UserLoginDetails.objects.filter(user__username=user, 
+                                                                attempt="Manual Confirmation Required", 
+                                                                reason = "Login is unusual",
+                                                                user_confirm = "Pending due to unusual login")
+            deleteLoginDetails.delete()
+            messages.warning(request, "Check your internet connection")
+        return redirect('login')
     elif count<=2 and current_user_2fa_status == 0:
         user = User.objects.get(username = user.username)
         user.is_active = False
@@ -459,8 +483,8 @@ def verify_user_by_backup_codes(request, en_username):
                     update_attempt_failed.save()
                     backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(user = user, status = "Failed").count()
                     if backup_code_attempt_status_count > 4:
-                        block_ip = User_IP_B_List(black_list=ip)
-                        block_ip.save()
+                        suspicious_ip = User_IP_S_List(suspicious_list=ip)
+                        suspicious_ip.save()
                     else:
                         return redirect('verify_user_by_backup_codes', username=en_username)
             else:
@@ -476,23 +500,19 @@ def verify_user_by_backup_codes(request, en_username):
 def detect_spam_login(request, uid, spam_user_ip_address):
     twenty_four_hrs = pydt.datetime.now() - pydt.timedelta(days=1)
     if uid == None:
-        check_failed_login_attempts = UserLoginDetails.objects.filter(user_ip_address = spam_user_ip_address, attempt="Failed", created_at__gte=twenty_four_hrs).count()
-        if check_failed_login_attempts > 4:
+        check_failed_login_attempts = UserLoginDetails.objects.filter(user_ip_address = spam_user_ip_address, attempt="Failed", reason="Connection is NOT secured", created_at__gte=twenty_four_hrs).count()
+        if check_failed_login_attempts > 0:
             block_ip = User_IP_B_List(black_list=spam_user_ip_address)
             block_ip.save()
     elif uid != None:
-        check_failed_login_attempts = UserLoginDetails.objects.filter(user__username = uid, attempt="Failed", created_at__gte=twenty_four_hrs).count()
-        if check_failed_login_attempts == 3:
-            messages.info(request, 'It seems to be you have forgotten your password!')
-            messages.info(request, 'So, Please reset your password')
-            return redirect('login')
-        elif check_failed_login_attempts > 5:
+        check_failed_login_attempts = UserLoginDetails.objects.filter(user__username = uid, attempt="Failed", reason="Connection is NOT secured", created_at__gte=twenty_four_hrs).count()
+        if check_failed_login_attempts > 0:
             user = User.objects.get(username = uid)
             block_ip = User_IP_B_List(black_list=spam_user_ip_address, login_user = user)
             block_ip.save()
             user.is_active = False
             user.save()
-            current_site = get_current_site(request)  
+            current_site = get_current_site(request)
             mail_subject = 'Re-Activate Your AkirA Account'
             message = render_to_string('authentication/acc_active_email.html', {
                 'user': user,  
@@ -706,36 +726,233 @@ def twofa_verify_user_by_backup_codes(request, username):
             }
             return render(request, 'authentication/twoFactorAuthentication/two_fac_enter_backup_code.html', context)
 
+def confirmUserLogin(request, username):
+    try:
+        get_attempt_ARU = UserLoginDetails.objects.get(
+                        user__username=username, 
+                        attempt="Manual Confirmation Required",
+                        reason = "Login is unusual",
+                        user_confirm = "Pending due to unusual login")
+    except UserLoginDetails.DoesNotExist:
+        get_attempt_ARU = None
+    if get_attempt_ARU:
+        context = {
+            "username":username,
+        }
+        return render(request, 'authentication/confirmUserLogin.html', context)
+    else:
+        messages.info(request, "User is already confirmed!")
+        return redirect('login')
+
+def secure_account(request, username, user_response):
+    try:
+        get_attempt_ARU = UserLoginDetails.objects.get(
+                        user__username=username, 
+                        attempt="Manual Confirmation Required",
+                        reason = "Login is unusual",
+                        user_confirm = "Pending due to unusual login")
+    except UserLoginDetails.DoesNotExist:
+        get_attempt_ARU = None
+    if get_attempt_ARU != None:
+        get_attempt_ARU = UserLoginDetails.objects.get(
+                        user__username=username, 
+                        attempt="Manual Confirmation Required",
+                        reason = "Login is unusual",
+                        user_confirm = "Pending due to unusual login")
+        if get_attempt_ARU.user.username == username:
+            if user_response == "yes":
+                get_attempt_ARU = UserLoginDetails.objects.filter(user__username=username, attempt="Manual Confirmation Required").order_by('-created_at')[0]
+                get_attempt_ARU.attempt = "Success"
+                get_attempt_ARU.user_confirm = "Login Confirmed"
+                get_attempt_ARU.reason = "Login Confirmed via Email Manually"
+                get_attempt_ARU.save()
+                user = User.objects.get(username = username)
+                user.is_active = True
+                user.save()
+                return redirect('login')
+            else:
+                logout(request)
+                return redirect('login')
+        else:
+            logout(request)
+            return redirect('login')
+    else:
+        logout(request)
+        return redirect('login')
+
+def checkUserResponse(request, username):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+        # ip = '128.0.0.1'
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+        # ip = '128.0.0.1'
+    try:
+        userLoginDetails = UserLoginDetails.objects.get(
+                        user__username=username, 
+                        attempt="Success",
+                        user_confirm = "Login Confirmed",
+                        reason = "Login Confirmed via Email Manually")
+    except UserLoginDetails.DoesNotExist:
+        userLoginDetails = None
+    if (userLoginDetails != None) and (userLoginDetails.user_ip_address == ip):
+        user = User.objects.get(username = username)
+        login(request, user)
+        data = {
+            'status': 'success',
+        }
+    else:
+        logout(request)
+        data = {
+            'status': 'failed',
+        }
+    response = JsonResponse(data)
+    return response
+
+def requestSwitchDevice(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    user_agent = request.META['HTTP_USER_AGENT']
+    browser = httpagentparser.detect(user_agent)
+    if not browser:
+        browser = user_agent.split('/')[0]
+    else:
+        browser = browser['browser']['name']
+
+    res = re.findall(r'\(.*?\)', user_agent)
+    OS_Details = res[0][1:-1]
+
+    if request.method == 'POST':
+        currentUserIPAddr = request.POST.get('user_ip_address')
+        currentUserBrowser = request.POST.get('user_browser')
+        currentUserOS = request.POST.get('user_os')
+        currentUsername = request.POST.get('username')
+        getUserObject = User.objects.get(username = currentUsername)
+        try:
+            SwitchDevice.objects.create(
+                    userIPAddr = currentUserIPAddr,
+                    userBrowser = currentUserBrowser,
+                    userOS = currentUserOS,
+                    reason = "Not Approved Yet",
+                    user = getUserObject)
+        except IntegrityError:
+            messages.info(request, "You have already requested to switch device!")
+            print("You have already requested to switch device!")
+
+        PostContext = {
+            "currentUsername":currentUsername,
+        }
+        return render(request, 'authentication/SwitchDevice/waitingSwitchDeviceResponse.html', PostContext)
+    context = {
+        "CurrentUserIPAddr":ip,
+        "CurrentBrowser":browser,
+        "CurrentOS":OS_Details,
+    }
+    return render(request, 'authentication/SwitchDevice/requestSwitchDevice.html', context)
+
+def validateSwitchDevice(request):
+    try:
+        get_SwitchDeviceRequest = SwitchDevice.objects.get(
+                                            user__username=request.user.username,
+                                            reason = "Not Approved Yet",
+                                            userConfirm = "Pending")
+    except SwitchDevice.DoesNotExist:
+        get_SwitchDeviceRequest = None
+    if request.method == "POST":
+        if get_SwitchDeviceRequest != None:
+            get_SwitchDeviceRequest = SwitchDevice.objects.get(
+                            user__username=request.user.username,
+                            reason = "Not Approved Yet",
+                            userConfirm = "Pending")
+            if get_SwitchDeviceRequest.user.username == request.user.username:
+                getLastPage = UserPageVisits.objects.filter(user__username=request.user.username).order_by('-created_at')[0]
+                update_SwitchDeviceRequest = SwitchDevice.objects.filter(user__username=request.user.username, 
+                                                            reason = "Not Approved Yet",
+                                                            userConfirm = "Pending",
+                                                            status="Switch Device Pending").order_by('-created_at')[0]
+                update_SwitchDeviceRequest.userConfirm = "User Approved"
+                update_SwitchDeviceRequest.reason = "User Confirmed the Switch Device"
+                update_SwitchDeviceRequest.currentPage = getLastPage.currentPage
+                update_SwitchDeviceRequest.save()
+                user = User.objects.get(username = request.user.username)
+                user.is_active = True
+                user.save()
+                return HttpResponse("Your Approval Request is been taken successfully")
+        else:
+            logout(request)
+            return HttpResponse("No Switch Device Request Found!")
+    Context = {
+        "get_SwitchDeviceRequest":get_SwitchDeviceRequest,
+    }
+    return render(request, 'authentication/SwitchDevice/acceptSwitchDevice.html', Context)
+
+def checkValidatedSwitchDeviceRequest(request, username):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    try:
+        GetSwitchDeviceRequestObject = SwitchDevice.objects.get(
+                        user__username=username, 
+                        userConfirm = "User Approved",
+                        reason = "User Confirmed the Switch Device",
+                        status="Switch Device Pending")
+    except SwitchDevice.DoesNotExist:
+        GetSwitchDeviceRequestObject = None
+    if (GetSwitchDeviceRequestObject != None) and (GetSwitchDeviceRequestObject.userIPAddr == ip):
+        user = User.objects.get(username = username)
+        currentUrl = GetSwitchDeviceRequestObject.currentPage
+        login(request, user)
+        data = {
+            'status': 'success',
+            'redirect_url':currentUrl,
+        }
+    else:
+        logout(request)
+        data = {
+            'status': 'failed',
+        }
+    response = JsonResponse(data)
+    return response
+
+def SwitchDeviceStatus(request, username):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    try:
+        GetSwitchDeviceRequestObject = SwitchDevice.objects.get(
+                        user__username=username, 
+                        userConfirm = "User Approved",
+                        reason = "User Confirmed the Switch Device")
+    except SwitchDevice.DoesNotExist:
+        GetSwitchDeviceRequestObject = None
+    if (GetSwitchDeviceRequestObject != None) and (GetSwitchDeviceRequestObject.userIPAddr == ip):
+        update_SwitchDeviceStatus = SwitchDevice.objects.filter(user__username=request.user.username, 
+                                                    reason = "User Confirmed the Switch Device",
+                                                    userConfirm = "User Approved").order_by('-created_at')[0]
+        update_SwitchDeviceStatus.status = "Switch Device Successful"
+        update_SwitchDeviceStatus.save()
+        return None
+    else:
+        return HttpResponse("No Switch Device Request Found!")
+
+def listSwitchDevice(request):
+    SwitchDeviceList = SwitchDevice.objects.filter(user__username = request.user.username)
+    return JsonResponse({'SwitchDeviceList': list(SwitchDeviceList.values())})
+
+# SwitchDevice.objects.all().delete()
+# UserPageVisits.objects.all().delete()
+
 def logoutUser(request):
     if request.user.is_authenticated:
         logout(request)
         return redirect('login')
     else:
         return redirect('login')
-
-def handler400(request, exception):
-    title = "Error 400 (Bad Request)!!"
-    context = {
-        "title":title,
-        "status_code":400
-    }
-    return render(request, 'authentication/ErrorHandler.html', context)
-
-def handler403(request, exception):
-    return redirect('login')
-
-def handler404(request, exception):
-    title = "Error 404 (URL Not Found)!!"
-    context = {
-        "title":title,
-        "status_code":404
-    }
-    return render(request, 'authentication/ErrorHandler.html', context)
-
-def handler500(request, template_name='authentication/ErrorHandler.html'):
-    title = "Error 500 (Internal Server Error)!!"
-    context = {
-        "title":title,
-        "status_code":500
-    }
-    return render(request, 'authentication/ErrorHandler.html', context)
