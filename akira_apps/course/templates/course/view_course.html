@@ -1,6 +1,7 @@
 {% extends 'side_panel-navbar_dashboard.html' %}
 {% load static %}
 {% load first_letter_word %}
+{% load course_components %}
 
 {% block content %}
 
@@ -10,6 +11,29 @@
 {% endblock %}
 
 {% block view-course %}
+
+<style>
+{% for i in courseComponent %}
+#tab{{ forloop.counter }}:checked ~ #content{{ forloop.counter }}{% if forloop.last %} {% else %},{% endif %}
+{% endfor %}
+{
+    display: block;
+    padding: 20px;
+    background: #fff;
+    color: #999;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+#tab{{ courseComponent|length|add:"1" }}:checked ~ #content{{ courseComponent|length|add:"1" }}
+{
+    display: block;
+    padding: 20px;
+    background: #fff;
+    color: #999;
+    border-bottom: 2px solid #f0f0f0;
+}
+</style>
+
 <h4>Course Short Info</h4>
 {{ course.course_short_info }}
 <br>
@@ -43,6 +67,131 @@
 <br>
 <h4>Action</h4>
 <a href="{% url 'delete_course' course.id %}">Delete Course</a>
+
+<!-- <hr>
+
+{% for i in courseComponent %}
+{{ i.name }} | {{ i.desc }} <br>
+{% endfor %}
+
+<hr>
+
+{% for i in courseSubComponent %}
+{{ i.course.course_name }} | {{ i.component.name }} | {{ i.name }} | {{ i.desc }} <br>
+{% endfor %}
+
+<hr> -->
+
+<!-- {% for i in courseTask %}
+<p>{{ i.question }}</p>
+<form action="{% url 'task_answer' %}" method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="course" id="id_course" value="{{ course.id }}" required>
+    <input type="hidden" name="component" id="id_component" value="{{ i.component.id }}" required>
+    <input type="hidden" name="subcomponent" id="id_subcomponent" value="{{ i.sub_component.id }}" required>
+    <input type="hidden" name="task" id="id_task" value="{{ i.id }}" required>
+    <input type="file" name="answer" id="id_answer" required>
+    <input type="submit">
+</form>
+{% endfor %} -->
+
+<!-- {% for i in taskAnswer %}
+{{ i.answer }} <br>
+{% endfor %} -->
+
+<div class="tab_container">
+    {% for i in courseComponent %}
+    <input id="tab{{ forloop.counter }}" type="radio" name="tabs" {% if forloop.counter == 1 %} checked {% endif %}>
+    <label class="tab-labels" for="tab{{ forloop.counter }}"><i class="fa-regular fa-folder"></i><span>{{ i.name }}</span></label>
+    {% endfor %}
+    
+    <input id="tab{{ courseComponent|length|add:"1" }}" type="radio" name="tabs">
+    <label class="tab-labels" for="tab{{ courseComponent|length|add:"1" }}"><i class="fa-solid fa-folder-plus"></i>&nbsp;&nbsp;<span>Create</span></label>
+
+    {% for i in courseComponent %}
+    <section id="content{{ forloop.counter }}" class="tab-content tab-section">
+        <h4>Total Submissions: 48</h4>
+        <h4>Still 4 Members</h4>
+        {% for j in i.id|subComponent %}
+        <details>
+            <summary>{{ j.sub_component.name }}</summary>
+            {{ j }}
+            <a href="{% url 'submitSolutionPage' j.id %}">Submit the Solution</a>
+        </details>
+        {% endfor %}
+    </section>
+    {% endfor %}
+
+    <section id="content{{ courseComponent|length|add:"1" }}" class="tab-content tab-section">
+        <h4>Course Component</h4>
+        <form action="{% url 'course_component' %}" method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="course" id="id_course" value="{{ course.id }}" placeholder="Course" required>
+            <input type="text" name="component" id="id_component" placeholder="Name" required>
+            <input type="text" name="desc" id="id_desc" placeholder="description" required>
+            <input type="submit">
+        </form>
+        <hr>
+        <h4>Sub Components</h4>
+        <form action="{% url 'sub_component' %}" method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="course" id="id_course" value="{{ course.id }}" required>
+            <select name="component" id="id_component">
+                <option value="">Select Component</option>
+                {% for i in courseComponent %}
+                <option value="{{ i.id }}">{{ i.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="sub_component" id="id_sub_component" placeholder="Name" required>
+            <input type="text" name="desc" id="id_desc" placeholder="description" required>
+            <input type="submit">
+        </form>
+        <hr>
+        <h4>Course Task</h4>
+        <form action="{% url 'course_task' %}" method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="course" id="id_course" value="{{ course.id }}" required>
+            <select name="component-course-task" id="id_component">
+                <option value="">Select Component</option>
+                {% for i in courseComponent %}
+                <option value="{{ i.id }}">{{ i.name }}</option>
+                {% endfor %}
+            </select>
+            <select name="subcomponent" id="id_subcomponent-get">
+                <option value="">Select Sub Component</option>
+                {% for i in courseSubComponent %}
+                <option value="{{ i.id }}">{{ i.name }}</option>
+                {% endfor %}
+            </select>
+            <textarea name="question" id="id_question" cols="30" rows="10"></textarea>
+            <input type="submit">
+        </form>
+    </section>
+
+</div>
+
+<script>
+    $("select[name = 'component-course-task']").change(function () {
+        const componentId = $(this).val();
+        console.log(componentId);
+        $.ajax({
+            type: "POST",
+            url: '{% url "subComponentsbyComponents" %}',
+            data: {
+                'component': componentId,
+                'csrfmiddlewaretoken':$('input[name=csrfmiddlewaretoken]').val(),
+            },
+            success: function (data) {
+                let html_data = '<option value=""> Select Sub Component </option>';
+                data.forEach(function (data) {
+                    html_data += `<option value="${data.id}">${data.name}</option>`
+                });
+                $("#id_subcomponent-get").html(html_data);
+            }
+        });
+    });
+  </script>
+
 {% endblock %}
 
 {% endblock %}

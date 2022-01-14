@@ -16,14 +16,16 @@ urlpatterns = [
     path('checkUserResponse/<username>/', views.checkUserResponse, name="checkUserResponse"),
     
     path('verify_user_by_email/<username>/', views.verify_user_by_email, name="verify_user_by_email"),
-    path('verify_user_by_backup_codes/<en_username>/', views.verify_user_by_backup_codes, name="verify_user_by_backup_codes"),
+    path('verify_user_by_backup_codes/<username>/', views.verify_user_by_backup_codes, name="verify_user_by_backup_codes"),
     path('confirm/<uidb64>/<token>/', views.confirm, name='confirm'),
+    path('confirmEmailStatus/<username>/', views.confirmEmailStatus, name="confirmEmailStatus"),
     
     path('activate/<uidb64>/<token>/', views.activate, name='activate'),
 
     path('twofa_verify_its_you/<username>/', views.twofa_verify_its_you, name="twofa_verify_its_you"),
-    path('twofa_verify_user_by_email/<username>/', views.twofa_verify_user_by_email, name="twofa_verify_user_by_email"),
-    path('twofacauth_email/<uidb64>/<token>/', views.twofacauth_email, name='twofacauth_email'),
+    # path('twofa_verify_user_by_email/<username>/', views.twofa_verify_user_by_email, name="twofa_verify_user_by_email"),
+    # path('twofacauth_email/<uidb64>/<token>/', views.twofacauth_email, name='twofacauth_email'),
+    # path('confirm2FAEmailStatus/<username>/', views.confirm2FAEmailStatus, name="confirm2FAEmailStatus"),
     path('twofa_verify_user_by_backup_codes/<username>/', views.twofa_verify_user_by_backup_codes, name="twofa_verify_user_by_backup_codes"),
     
     path('reset_password/',
@@ -42,9 +44,10 @@ urlpatterns = [
         name="password_reset_complete"),
 
     path('requestSwitchDevice/', views.requestSwitchDevice, name="requestSwitchDevice"),
+    path('waitingSwitchDeviceResponse/<switchDeviceReqID>/<username>/', views.waitingSwitchDeviceResponse, name="waitingSwitchDeviceResponse"),
     path('validateSwitchDevice/', views.validateSwitchDevice, name="validateSwitchDevice"),
-    path('checkValidatedSwitchDeviceRequest/<username>/', views.checkValidatedSwitchDeviceRequest, name="checkValidatedSwitchDeviceRequest"),
-    path('listSwitchDevice/', views.listSwitchDevice, name="listSwitchDevice"),
+    path('denySwitchDevice/<switchDeviceReqID>/', views.denySwitchDevice, name="denySwitchDevice"),
+    path('checkValidatedSwitchDeviceRequest/<username>/<switchDeviceID>/', views.checkValidatedSwitchDeviceRequest, name="checkValidatedSwitchDeviceRequest"),
     path('SwitchDeviceStatus/<username>/', views.SwitchDeviceStatus, name="SwitchDeviceStatus"),
-    path('SyncDevice/', views.SyncDevice, name="SyncDevice"),
+    path('SyncDevice/<switchDeviceID>/', views.SyncDevice, name="SyncDevice"),
 ]

@@ -1,18 +1,16 @@
-from decimal import Context
-from django.http.response import HttpResponse, JsonResponse
-from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout
-from django.template.loader import render_to_string
-from django.conf import settings
-from django.core.mail import send_mail, EmailMessage
-from django.contrib.auth.models import Group, User
 from django import http
-from django.contrib.sites.shortcuts import get_current_site
 from django.utils.encoding import force_bytes, force_text  
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.contrib.auth import get_user_model, authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.contrib.sites.shortcuts import get_current_site
+from django.core.mail import send_mail, EmailMessage
+from django.http.response import HttpResponse, JsonResponse
+from django.shortcuts import render, redirect
+from django.template.loader import render_to_string
 
 import datetime as pydt
 import re
@@ -23,185 +21,246 @@ import requests
 from akira_apps.super_admin.decorators import unauthenticated_user
 from akira_apps.accounts.models import TwoFactorAuth
 from akira_apps.authentication.token import account_activation_token
-from . models import (User_BackUp_Codes, User_BackUp_Codes_Login_Attempts, User_IP_S_List, UserLoginDetails, User_IP_B_List, SwitchDevice, UserPageVisits)
+from . models import (User_BackUp_Codes, User_BackUp_Codes_Login_Attempts, 
+                        User_IP_S_List, UserLoginDetails, User_IP_B_List, 
+                        SwitchDevice, UserPageVisits)
 
 from akira_apps.staff.urls import *
 from akira_apps.super_admin.urls import *
 from akira_apps.academic_registration.urls import *
 
-# UserLoginDetails.objects.filter(user_ip_address='128.0.0.1').delete()
 @unauthenticated_user
 def user_login(request):
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
-        # ip = '128.0.0.1'
     else:
         ip = request.META.get('REMOTE_ADDR')
-        # ip = '128.0.0.1'
     current_time = pydt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if request.method == 'POST':
         username = request.POST.get('username')
-
-        custom_encrypted_username = ""
-        for i in range(len(username)):
-            custom_encrypted_username += chr(ord(username[i]) + 468)
-
         ep = request.POST.get('password')
-
-        try:
-            # url = 'https://salty-earth-61106.herokuapp.com/getMetaData/{}/{}/'.format(username, ep)
-            url = 'https://akira-rest-api.herokuapp.com/getMetaData/{}/{}/?format=json'.format(username, ep)
-            response = requests.get(url)
-            data = response.json()
-            print(data)
-        except Exception as e:
-            if "Failed to establish a new connection" in str(e):
-                messages.info(request, "Server under maintenance. Please try again later.")
-                return redirect('login')
-
         user_ip_address = ip
 
         try:
-            captcha_token=request.POST.get("g-recaptcha-response")
-            cap_url="https://www.google.com/recaptcha/api/siteverify"
-            cap_secret=settings.GOOGLE_RECAPTCHA_SECRET_KEY
-            cap_data={"secret":cap_secret,"response":captcha_token}
-            cap_server_response=requests.post(url=cap_url,data=cap_data)
-            cap_json=json.loads(cap_server_response.text)
+            url = 'https://akira-rest-api.herokuapp.com/getEncryptionData/{}/?format=json'.format(username)
+            response = requests.get(url)
+            dataUsername = response.json()
+        except Exception:
+            messages.info(request, "Server under maintenance. Please try again later.")
+            return redirect('login')
+
+        try:
+            getMetaDataUrl = 'https://akira-rest-api.herokuapp.com/getMetaData/{}/{}/?format=json'.format(username, ep)
+            getMetaDataUrlResponse = requests.get(getMetaDataUrl)
+            data = getMetaDataUrlResponse.json()
+        except Exception:
+            messages.info(request, "Server under maintenance. Please try again later.")
+            return redirect('login')
+
+        try:
+            captcha_token = request.POST.get("g-recaptcha-response")
+            cap_url = "https://www.google.com/recaptcha/api/siteverify"
+            cap_secret = settings.GOOGLE_RECAPTCHA_SECRET_KEY
+            cap_data = {"secret": cap_secret, "response": captcha_token}
+            cap_server_response = requests.post(url = cap_url, data = cap_data)
+            cap_json = json.loads(cap_server_response.text)
         except Exception:
             messages.info(request, 'Check your internet connection')
             return redirect('login')
 
         try:
-            checkUserExists = User.objects.get(username=username)
+            checkUserExists = User.objects.get(username = username)
         except User.DoesNotExist:
             checkUserExists = None
+
+        user = User.objects.get(username = username)
+
+        try:
+            checkSD = SwitchDevice.objects.get(user = user, status = "Switch Device Successful")
+        except SwitchDevice.DoesNotExist:
+            checkSD = None
         
+        if checkSD:
+            updatecheckSD = SwitchDevice.objects.filter(user = user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful")[0]
+            updatecheckSD.reason = "User Logged In"
+            updatecheckSD.status = "Terminated"
+            updatecheckSD.save()
+
+        try:
+            checkSDPNA = SwitchDevice.objects.get(user = user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
+        except SwitchDevice.DoesNotExist:
+            checkSDPNA = None
+
+        if checkSDPNA:
+            updatecheckSDPNA = SwitchDevice.objects.get(user = user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
+            updatecheckSDPNA.userConfirm = "User Denied"
+            updatecheckSDPNA.reason = "User Logged In"
+            updatecheckSDPNA.status = "Terminated"
+            updatecheckSDPNA.save()
+
         if cap_json['success'] == True:
-            if checkUserExists:
-                user = User.objects.get(username = username)
-                try:
-                    status_2fa = TwoFactorAuth.objects.get(user__username=username)
-                except TwoFactorAuth.DoesNotExist:
-                    status_2fa = None
-                if (status_2fa != None) and (status_2fa.twofa == 0):
-                    current_user_2fa_status = 0
-                elif (status_2fa != None) and (status_2fa.twofa == 1):
-                    current_user_2fa_status = 1
-                else:
-                    current_user_2fa_status = 0
-                getSuspiciousIPAddress = User_IP_S_List.objects.all()
-                for i in getSuspiciousIPAddress:
-                    if i.suspicious_list == user_ip_address:
-                        user.is_active = False
-                        user.save()
-                        save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", "User login from suspicious IP Address")
-                if user.is_active == True:
-                    if data['checkKeyEncrypted'] is True:
-                        user = authenticate(request, username=username, password=data['MetaKey'])
-                        if user is not None:
-                            save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", None)
-                            dataset_UserLoginDetails = UserLoginDetails.objects.filter(user__username=username).count()
-                            if dataset_UserLoginDetails > 2:
-                                verify_login(request, username, current_time, user)
-                                if current_user_2fa_status == 1:
-                                    user.is_active = False
-                                    user.save()
-                                    return redirect('twofa_verify_its_you', username=custom_encrypted_username)
-                                try:
-                                    get_attempt_MCR = UserLoginDetails.objects.get(
-                                                        user__username=user, 
-                                                        attempt="Manual Confirmation Required",
-                                                        reason = "Login is unusual",
-                                                        user_confirm = "Pending due to unusual login")
-                                except UserLoginDetails.DoesNotExist:
-                                    get_attempt_MCR = None
-                                if get_attempt_MCR:
-                                    return redirect('confirmUserLogin', username=username)
+            if data['checkKeyEncrypted'] is True:
+                if User_IP_S_List.objects.filter(suspicious_list = user_ip_address).exists() is False:
+                    if checkUserExists:
+                        if user.is_active == True:
+                            user = authenticate(request, username = username, password = data['MetaKey'])
+                            if user is not None:
+                                save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", None)
+                                if TwoFactorAuth.objects.filter(user__username = username, twofa = True).exists() is True:
+                                    return redirect('twofa_verify_its_you', username = dataUsername['EncryptedUsername'])
                                 else:
-                                    return redirect('login')
-                            elif dataset_UserLoginDetails < 3:
-                                current_userFailedAttempts_count = UserLoginDetails.objects.filter(user__username=username, attempt="Failed").count()
-                                current_userFailedAttempts = UserLoginDetails.objects.filter(user__username=username, attempt="Failed").order_by('-created_at')
-                                twenty_four_hrs = pydt.datetime.now() - pydt.timedelta(days=1)
-                                failedLoginAttemptsFromIPCount = UserLoginDetails.objects.filter(user_ip_address = ip, attempt="Failed", created_at__gte=twenty_four_hrs).count()
-                                if (current_user_2fa_status == 0) and ((failedLoginAttemptsFromIPCount < 5) and ((current_userFailedAttempts_count < 5) or (current_userFailedAttempts[0].attempt == "Success"))):
-                                    current_userlogindetailsObject = UserLoginDetails.objects.filter(user__username=username, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
-                                    get_current_userlogindetailsObject_Id = UserLoginDetails.objects.get(id=current_userlogindetailsObject.id)
-                                    get_current_userlogindetailsObject_Id.attempt = "Success"
-                                    get_current_userlogindetailsObject_Id.save()
-                                    
-                                    login(request, user)
-                                    group = None
-                                    if request.user.groups.exists():
-                                        group = request.user.groups.all()[0].name
-                                    if group == 'Student':
-                                        if (request.GET.get('next')):
-                                            return redirect(request.GET.get('next'))
+                                    dataset_UserLoginDetails = UserLoginDetails.objects.filter(user__username = username).count()
+                                    if dataset_UserLoginDetails > 2:
+                                        current_uld = UserLoginDetails.objects.filter(user__username = username)
+                                        old_uld_7 = UserLoginDetails.objects.filter(created_at__lte = pydt.datetime.now() - pydt.timedelta(days = 7)).count()
+                                        last_current_uld = UserLoginDetails.objects.filter(user__username = username).order_by('-created_at')
+                                        current_user = User.objects.get(username = username)
+                                        list_current_uld_ipa = []
+                                        list_current_uld_osd = []
+                                        list_current_uld_bd = []
+                                        if len(current_uld) > old_uld_7:
+                                            n = len(current_uld) - old_uld_7
                                         else:
-                                            return redirect('student_dashboard')
-                                    elif group == 'Assistant Professor':
-                                        if (request.GET.get('next')):
-                                            return redirect(request.GET.get('next'))
-                                        else: 
-                                            return redirect('staff_dashboard')
-                                    elif group == 'Associate Professor':
-                                        if (request.GET.get('next')):
-                                            return redirect(request.GET.get('next'))
-                                        else: 
-                                            return redirect('staff_dashboard')
-                                    elif group == 'Professor':
-                                        if (request.GET.get('next')):
-                                            return redirect(request.GET.get('next'))
-                                        else: 
-                                            return redirect('staff_dashboard')
-                                    elif group == 'Head of the Department':
-                                        if (request.GET.get('next')):
-                                            return redirect(request.GET.get('next'))
-                                        else: 
-                                            return redirect('hod_dashboard')
-                                    elif group == 'Course Co-Ordinator':
-                                        if (request.GET.get('next')):
-                                            return redirect(request.GET.get('next'))
-                                        else: 
-                                            return redirect('staff_dashboard')
-                                    elif group == 'Administrator':
-                                        if (request.GET.get('next')):
-                                            return redirect(request.GET.get('next'))
-                                        else:
-                                            return redirect('super_admin_dashboard')
-                                elif current_user_2fa_status == 1:
-                                    user.is_active = False
-                                    user.save()
-                                    return redirect('twofa_verify_its_you', username=custom_encrypted_username)
-                                else:
-                                    user.is_active = False
-                                    user.save()
-                                    return redirect('verify_its_you', username=custom_encrypted_username)
+                                            n = 0
+                                        for i in range(n,len(current_uld)-1):
+                                            list_current_uld_ipa.append(current_uld[i].user_ip_address)
+                                            list_current_uld_osd.append(current_uld[i].os_details)
+                                            list_current_uld_bd.append(current_uld[i].browser_details)
+
+                                        user_ip_address = list(last_current_uld)[0].user_ip_address
+                                        os_details = list(last_current_uld)[0].os_details
+                                        browser_details = list(last_current_uld)[0].browser_details
+
+                                        count = 0
+                                        if user_ip_address in list_current_uld_ipa:
+                                            count += 16
+                                        if os_details in list_current_uld_osd:
+                                            count += 4
+                                        if browser_details in list_current_uld_bd:
+                                            count += 2
+                                        if (count == 22):
+                                            login(request, user)
+                                            get_attempt_ncy = UserLoginDetails.objects.filter(user__username = username, attempt = "Not Confirmed Yet!").order_by('-created_at')[0]
+                                            update_attempt_ncy = UserLoginDetails.objects.get(id = get_attempt_ncy.id)
+                                            update_attempt_ncy.score = count
+                                            update_attempt_ncy.attempt = "Success"
+                                            update_attempt_ncy.reason = str(count)
+                                            update_attempt_ncy.save()
+                                            return redirect('login')
+                                        elif (count >= 4 and count <= 20):
+                                            get_attempt_ncy = UserLoginDetails.objects.filter(user__username = username, attempt = "Not Confirmed Yet!").order_by('-created_at')[0]
+                                            update_attempt_ncy = UserLoginDetails.objects.get(id = get_attempt_ncy.id)
+                                            update_attempt_ncy.score = count
+                                            update_attempt_ncy.attempt = "Manual Confirmation Required"
+                                            update_attempt_ncy.reason = "Login is unusual"
+                                            update_attempt_ncy.user_confirm = "Pending due to unusual login"
+                                            update_attempt_ncy.save()
+                                            current_site = get_current_site(request)
+                                            context = {
+                                                "first_name": current_user.first_name,
+                                                "email": current_user.email,
+                                                "user_ip_address": user_ip_address,
+                                                "os_details": os_details,
+                                                "browser_details": browser_details,
+                                                "current_time": current_time,
+                                                "username": dataUsername['EncryptedUsername'],
+                                                "domain": current_site.domain,
+                                            }
+                                            template = render_to_string('authentication/login_alert_email.html', context)
+                                            try:
+                                                send_mail('Akira Account Login Alert', template, settings.EMAIL_HOST_USER, [current_user.email], html_message=template)
+                                                messages.info(request, "Please check your email inbox")
+                                                return redirect('confirmUserLogin', username = dataUsername['EncryptedUsername'])
+                                            except Exception:
+                                                deleteLoginDetails = UserLoginDetails.objects.filter(user__username = username, 
+                                                                                                    attempt = "Manual Confirmation Required", 
+                                                                                                    reason = "Login is unusual",
+                                                                                                    user_confirm = "Pending due to unusual login")
+                                                deleteLoginDetails.delete()
+                                                messages.warning(request, "Check your internet connection")
+                                                return redirect('login')
+                                        elif count <= 2:
+                                            user = User.objects.get(username = user.username)
+                                            user.is_active = False
+                                            user.save()
+                                            get_attempt_ncy = UserLoginDetails.objects.filter(user__username = username, attempt = "Not Confirmed Yet!").order_by('-created_at')[0]
+                                            update_attempt_ncy = UserLoginDetails.objects.get(id = get_attempt_ncy.id)
+                                            update_attempt_ncy.score = count
+                                            update_attempt_ncy.attempt = "Need to verify"
+                                            update_attempt_ncy.reason = str(count)
+                                            update_attempt_ncy.save()
+                                            return redirect('verify_its_you', username = dataUsername['EncryptedUsername'])
+                                    elif dataset_UserLoginDetails < 3:
+                                        current_userlogindetailsObject = UserLoginDetails.objects.filter(user__username = username, attempt = "Not Confirmed Yet!").order_by('-created_at')[0]
+                                        get_current_userlogindetailsObject_Id = UserLoginDetails.objects.get(id = current_userlogindetailsObject.id)
+                                        get_current_userlogindetailsObject_Id.attempt = "Success"
+                                        get_current_userlogindetailsObject_Id.save()
+                                        
+                                        login(request, user)
+                                        group = None
+                                        if request.user.groups.exists():
+                                            group = request.user.groups.all()[0].name
+                                        if group == 'Student':
+                                            if (request.GET.get('next')):
+                                                return redirect(request.GET.get('next'))
+                                            else:
+                                                return redirect('student_dashboard')
+                                        elif group == 'Assistant Professor':
+                                            if (request.GET.get('next')):
+                                                return redirect(request.GET.get('next'))
+                                            else: 
+                                                return redirect('staff_dashboard')
+                                        elif group == 'Associate Professor':
+                                            if (request.GET.get('next')):
+                                                return redirect(request.GET.get('next'))
+                                            else: 
+                                                return redirect('staff_dashboard')
+                                        elif group == 'Professor':
+                                            if (request.GET.get('next')):
+                                                return redirect(request.GET.get('next'))
+                                            else: 
+                                                return redirect('staff_dashboard')
+                                        elif group == 'Head of the Department':
+                                            if (request.GET.get('next')):
+                                                return redirect(request.GET.get('next'))
+                                            else: 
+                                                return redirect('hod_dashboard')
+                                        elif group == 'Course Co-Ordinator':
+                                            if (request.GET.get('next')):
+                                                return redirect(request.GET.get('next'))
+                                            else: 
+                                                return redirect('staff_dashboard')
+                                        elif group == 'Administrator':
+                                            if (request.GET.get('next')):
+                                                return redirect(request.GET.get('next'))
+                                            else:
+                                                return redirect('super_admin_dashboard')
                             else:
-                                user.is_active = False
-                                user.save()
-                                return redirect('verify_its_you', username=custom_encrypted_username)
+                                messages.warning(request, 'Username or Password is Incorrect!')
+                                save_login_details(request, username, user_ip_address, "Failed", "Username or Password is Incorrect!")
+                                return redirect('login')
                         else:
-                            messages.warning(request, 'Username or Password is Incorrect!')
-                            save_login_details(request, username, user_ip_address, "Failed", "Username or Password is Incorrect!")
-                            return redirect('login')
+                            messages.info(request, 'Your account has been disabled')
+                            save_login_details(request, username, user_ip_address, "Need to verify", "User account is disabled")
+                            return redirect('verify_its_you', username = dataUsername['EncryptedUsername'])
                     else:
-                        messages.warning(request, 'Connection is NOT secured!')
-                        if checkUserExists:
-                            save_login_details(request, username, user_ip_address, "Failed", "Connection is NOT secured")
-                            detect_spam_login(request, username, user_ip_address)
-                        else:
-                            save_login_details(request, None, user_ip_address, "Failed", "Connection is NOT secured")
-                            detect_spam_login(request, None, user_ip_address)
+                        messages.warning(request, 'No such account exist!')
+                        save_login_details(request, None, user_ip_address, "Failed", "No such account exist!")
                         return redirect('login')
                 else:
-                    messages.info(request, 'You account has been disabled temporarily')
-                    return redirect('verify_its_you', username=custom_encrypted_username)
+                    messages.warning(request, 'Login from suspicious IP address')
+                    if checkUserExists:
+                        save_login_details(request, username, user_ip_address, "Need to verify", "Login attempt from suspicious IP address")
+                        return redirect('verify_its_you', username = dataUsername['EncryptedUsername'])
             else:
-                messages.warning(request, 'No such account exist!')
-                save_login_details(request, None, user_ip_address, "Failed", "No such account exist!")
+                messages.warning(request, 'Connection is NOT secured!')
+                if checkUserExists:
+                    save_login_details(request, username, user_ip_address, "Failed", "Connection is NOT secured")
+                    detect_spam_login(request, username, user_ip_address)
+                else:
+                    save_login_details(request, None, user_ip_address, "Failed", "Connection is NOT secured")
+                    detect_spam_login(request, None, user_ip_address)
                 return redirect('login')
         else:
             messages.error(request, 'Invalid Captcha try again!')
@@ -211,7 +270,7 @@ def user_login(request):
                 save_login_details(request, None, user_ip_address, "Failed", "Invalid Captcha try again!")
             return redirect('login')
     context = {
-        "GOOGLE_RECAPTCHA_PUBLIC_KEY":settings.GOOGLE_RECAPTCHA_PUBLIC_KEY,
+        "GOOGLE_RECAPTCHA_PUBLIC_KEY": settings.GOOGLE_RECAPTCHA_PUBLIC_KEY,
     }
     return render(request, 'authentication/login.html', context)
 
@@ -226,229 +285,149 @@ def save_login_details(request, user_name, user_ip_address, attempt, reason):
     res = re.findall(r'\(.*?\)', user_agent)
     OS_Details = res[0][1:-1]
     if user_name == None:
-        UserLoginDetails.objects.create(user_ip_address=user_ip_address, os_details=OS_Details, browser_details=browser, attempt=attempt, reason=reason)
+        UserLoginDetails.objects.create(user_ip_address = user_ip_address, os_details = OS_Details, browser_details = browser, attempt = attempt, reason = reason)
     else:
-        uid = User.objects.get(username=user_name)
+        userObj = User.objects.get(username=user_name)
         try:
-            UserLoginDetails.objects.create(user_ip_address=user_ip_address, user=uid, os_details=OS_Details, browser_details=browser, attempt=attempt, reason=reason)
+            UserLoginDetails.objects.create(user_ip_address = user_ip_address, user = userObj, os_details = OS_Details, browser_details = browser, attempt = attempt, reason = reason)
         except Exception as e:
             return e
 
-# UserLoginDetails.objects.last().delete()
-# print(UserLoginDetails.objects.all().count())
-def verify_login(request, uid, current_time, user):
-    current_uld = UserLoginDetails.objects.filter(user__username = uid)
-    old_uld_7 = UserLoginDetails.objects.filter(created_at__lte = pydt.datetime.now() - pydt.timedelta(days=7)).count()
-    last_current_uld = UserLoginDetails.objects.filter(user__username = uid).order_by('-created_at')
-    current_user = User.objects.get(username=uid)
-    list_current_uld_ipa = []
-    list_current_uld_osd = []
-    list_current_uld_bd = []
-    if len(current_uld) > old_uld_7:
-        n = len(current_uld) - old_uld_7
-    else:
-        n = 0
-    for i in range(n,len(current_uld)-1):
-        list_current_uld_ipa.append(current_uld[i].user_ip_address)
-        list_current_uld_osd.append(current_uld[i].os_details)
-        list_current_uld_bd.append(current_uld[i].browser_details)
-
-    user_ip_address = list(last_current_uld)[0].user_ip_address
-    os_details = list(last_current_uld)[0].os_details
-    browser_details = list(last_current_uld)[0].browser_details
-
-    custom_encrypted_username = ""
-    for i in range(len(uid)):
-        custom_encrypted_username += chr(ord(uid[i]) + 468)
-    try:
-        status_2fa = TwoFactorAuth.objects.get(user__username=uid)
-    except TwoFactorAuth.DoesNotExist:
-        status_2fa = None
-    if (status_2fa != None) and (status_2fa.twofa == 0):
-        current_user_2fa_status = 0
-    elif (status_2fa != None) and (status_2fa.twofa == 1):
-        current_user_2fa_status = 1
-    else:
-        current_user_2fa_status = 0
-
-    count = 0
-    if user_ip_address in list_current_uld_ipa:
-        count += 16
-    if os_details in list_current_uld_osd:
-        count += 4
-    if browser_details in list_current_uld_bd:
-        count += 2
-    if count == 22 and current_user_2fa_status == 0:
-        login(request, user)
-        get_attempt_ncy = UserLoginDetails.objects.filter(user__username=user, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
-        update_attempt_ncy = UserLoginDetails.objects.get(id=get_attempt_ncy.id)
-        update_attempt_ncy.score = count
-        update_attempt_ncy.attempt = "Success"
-        update_attempt_ncy.reason = str(count)
-        update_attempt_ncy.save()
-        return redirect('login')
-    elif(count>=4 and count<=20) and current_user_2fa_status == 0:
-        get_attempt_ncy = UserLoginDetails.objects.filter(user__username=user, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
-        update_attempt_ncy = UserLoginDetails.objects.get(id=get_attempt_ncy.id)
-        update_attempt_ncy.score = count
-        update_attempt_ncy.attempt = "Manual Confirmation Required"
-        update_attempt_ncy.reason = "Login is unusual"
-        update_attempt_ncy.user_confirm = "Pending due to unusual login"
-        update_attempt_ncy.save()
-        current_site = get_current_site(request)
-        context = {
-            "first_name":current_user.first_name,
-            "email":current_user.email,
-            "user_ip_address":user_ip_address,
-            "os_details":os_details,
-            "browser_details":browser_details,
-            "current_time":current_time,
-            "username":current_user,
-            "domain": current_site.domain,
-        }
-        template = render_to_string('authentication/login_alert_email.html', context)
-        try:
-            send_mail('Akira Account Login Alert', template, settings.EMAIL_HOST_USER, [current_user.email], html_message=template)
-            messages.info(request, "Please check your email inbox")
-        except Exception:
-            deleteLoginDetails = UserLoginDetails.objects.filter(user__username=user, 
-                                                                attempt="Manual Confirmation Required", 
-                                                                reason = "Login is unusual",
-                                                                user_confirm = "Pending due to unusual login")
-            deleteLoginDetails.delete()
-            messages.warning(request, "Check your internet connection")
-        return redirect('login')
-    elif count<=2 and current_user_2fa_status == 0:
-        user = User.objects.get(username = user.username)
-        user.is_active = False
-        user.save()
-        get_attempt_ncy = UserLoginDetails.objects.filter(user__username=user, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
-        update_attempt_ncy = UserLoginDetails.objects.get(id=get_attempt_ncy.id)
-        update_attempt_ncy.score = count
-        update_attempt_ncy.attempt = "Have to Verify"
-        update_attempt_ncy.reason = str(count)
-        update_attempt_ncy.save()
-        custom_encrypted_username = ""
-        for i in range(len(uid)):
-            custom_encrypted_username += chr(ord(uid[i]) + 468)
-        return redirect('verify_its_you', username=custom_encrypted_username)
-    else:
-        return redirect('twofa_verify_its_you', username=custom_encrypted_username)
-
 def verify_its_you(request, username):
-    custom_decrypted_username = ""
-    for i in range(len(username)):
-        custom_decrypted_username += chr(ord(username[i]) - 468)
-    
     try:
-        checkUserBackupCode = User_BackUp_Codes.objects.get(user__username = custom_decrypted_username)
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
+
+    try:
+        checkUserBackupCode = User_BackUp_Codes.objects.get(user__username = dataUsername['DecryptedUsername'])
     except User_BackUp_Codes.DoesNotExist:
         checkUserBackupCode = None
 
-    userLoginDetailsAttempt = UserLoginDetails.objects.filter(user__username = custom_decrypted_username, attempt = "Have to Verify").count()
-    user = User.objects.get(username=custom_decrypted_username)
-    if (user.is_active == True) and (userLoginDetailsAttempt == 0):
+    if UserLoginDetails.objects.filter(user__username = dataUsername['DecryptedUsername'], attempt = "Need to verify").exists() is False:
         return redirect('login')
     else:
         context = {
-            "username":username,
-            "checkUserBackupCode":checkUserBackupCode,
-            "custom_decrypted_username":custom_decrypted_username,
+            "username": username,
+            "checkUserBackupCode": checkUserBackupCode,
+            "custom_decrypted_username": dataUsername['DecryptedUsername'],
         }
         return render(request, 'authentication/verifyItsYou/verify_its_you.html', context)
 
 def verify_user_by_email(request, username):
-    custom_decrypted_username = ""
-    for i in range(len(username)):
-        custom_decrypted_username += chr(ord(username[i]) - 468)
+    try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
 
-    userAttemptStatus_count = UserLoginDetails.objects.filter(user__username = custom_decrypted_username, attempt = "Have to Verify").count()
-    user = User.objects.get(username=custom_decrypted_username)
-    if (user.is_active == True) and (userAttemptStatus_count == 0):
+    user = User.objects.get(username = dataUsername['DecryptedUsername'])
+    if UserLoginDetails.objects.filter(user__username = dataUsername['DecryptedUsername'], attempt = "Need to verify").exists() is False:
         messages.info(request, "You've been verified, already!")
         return redirect('login')
     else:
-        user = User.objects.get(username = custom_decrypted_username)
+        user = User.objects.get(username = dataUsername['DecryptedUsername'])
         current_site = get_current_site(request)
         mail_subject = "Verify It's You! - AkirA"
         message = render_to_string('authentication/verifyItsYou/user_confirmation_email.html', {
             'user': user,  
             'domain': current_site.domain,  
-            'uid':urlsafe_base64_encode(force_bytes(user.pk)),
-            'token':account_activation_token.make_token(user),
+            'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+            'token': account_activation_token.make_token(user),
         })
-        current_user = User.objects.get(username = custom_decrypted_username)
+        current_user = User.objects.get(username = dataUsername['DecryptedUsername'])
         to_email = current_user.email
         email = EmailMessage(mail_subject, message, to=[to_email])
         email.send()
         messages.warning(request, "Please Check Your Email Inbox")
-        return redirect('login')
+        loginAlertContent = {
+            "username": username,
+        }
+        return render(request, 'authentication/loginAlert.html', loginAlertContent)
 
 def confirm(request, uidb64, token):
     User = get_user_model()
-    try:  
+    try:
         uid = force_text(urlsafe_base64_decode(uidb64))
-        user = User.objects.get(pk=uid)  
+        user = User.objects.get(pk=uid)
     except(TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
     if user is not None and account_activation_token.check_token(user, token):
         user.is_active = True
         user.save()
-        get_attempt_ncy = UserLoginDetails.objects.filter(user__username=user, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
-        try:
-            update_attempt_ncy = UserLoginDetails.objects.get(id=get_attempt_ncy.id)
-            update_attempt_ncy.attempt = "Success"
-            update_attempt_ncy.reason = "Verified via Confirm Link via Email"
-            update_attempt_ncy.save()
-        except UserLoginDetails.DoesNotExist:
-            print("UserLoginDetails DoesNotExist")
-        login(request, user)
-        messages.success(request, "Login Successful")
-        return redirect('login')
+        get_attempt_ncy = UserLoginDetails.objects.filter(user__username = user, attempt = "Need to verify").order_by('-created_at')[0]
+        update_attempt_ncy = UserLoginDetails.objects.get(id=get_attempt_ncy.id)
+        update_attempt_ncy.attempt = "Success"
+        update_attempt_ncy.reason = "Verified via Confirm Link via Email"
+        update_attempt_ncy.save()
+        return HttpResponse("Thank you for confirming your Login")
     else:
         logout(request)
         messages.warning(request, "Link has been expired!")
         return redirect('login')
 
-def verify_user_by_backup_codes(request, en_username):
-    custom_decrypted_username = ""
-    for i in range(len(en_username)):
-        custom_decrypted_username += chr(ord(en_username[i]) - 468)
+def confirmEmailStatus(request, username):
     try:
-        checkUserBackupCode = User_BackUp_Codes.objects.get(user__username = custom_decrypted_username)
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
+
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+
+    if UserLoginDetails.objects.filter(user_ip_address = ip, 
+                                        user__username = dataUsername['DecryptedUsername'],
+                                        attempt = "Success", 
+                                        reason = "Verified via Confirm Link via Email").exists() is True:
+        user = User.objects.get(username = dataUsername['DecryptedUsername'])
+        messages.success(request, "Login Successful")
+        login(request, user)
+        data = {
+            'status': 'success',
+        }
+    else:
+        logout(request)
+        data = {
+            'status': 'failed',
+        }
+    response = JsonResponse(data)
+    return response
+
+def verify_user_by_backup_codes(request, username):
+    try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
+    try:
+        checkUserBackupCode = User_BackUp_Codes.objects.get(user__username = dataUsername['DecryptedUsername'])
     except User_BackUp_Codes.DoesNotExist:
         checkUserBackupCode = None
     if checkUserBackupCode != None:
-        try:
-            status_2fa = TwoFactorAuth.objects.get(user__username=custom_decrypted_username)
-        except TwoFactorAuth.DoesNotExist:
-            status_2fa = None
-        current_user_2fa_status = 0
-        if (status_2fa != None) and (status_2fa.twofa == 0):
-            current_user_2fa_status = 0
-        elif (status_2fa != None) and (status_2fa.twofa == 1):
-            current_user_2fa_status = 1
-        else:
-            current_user_2fa_status = 0
-
-        try:
-            checkUserBackupCode = User_BackUp_Codes.objects.get(user__username = custom_decrypted_username)
-        except User_BackUp_Codes.DoesNotExist:
-            checkUserBackupCode = None
-
-        userLoginDetailsAttempt = UserLoginDetails.objects.filter(user__username = custom_decrypted_username, attempt = "Have to Verify").count()
-        user = User.objects.get(username=custom_decrypted_username)
-        if (user.is_active == True) and (userLoginDetailsAttempt == 0 or current_user_2fa_status == 0):
+        user = User.objects.get(username=dataUsername['DecryptedUsername'])
+        if (UserLoginDetails.objects.filter(user__username = dataUsername['DecryptedUsername'], attempt = "Need to verify").exists() is False):
             return redirect('login')
         else:
-            user = User.objects.get(username = custom_decrypted_username)
+            user = User.objects.get(username = dataUsername['DecryptedUsername'])
             if request.method == 'POST':
                 x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
                 if x_forwarded_for:
                     ip = x_forwarded_for.split(',')[0]
                 else:
                     ip = request.META.get('REMOTE_ADDR')
-                user_confirm = 0
                 backup_code = request.POST.get('backup_code')
                 current_user_backup_codes = User_BackUp_Codes.objects.get(user=user)
                 backup_codes_with_hash = current_user_backup_codes.backup_codes
@@ -457,218 +436,229 @@ def verify_user_by_backup_codes(request, en_username):
                 for i in splitup_backup_codes:
                     align_backup_code.append(i)
                 if backup_code in align_backup_code:
-                    user_confirm = 1
                     align_backup_code.remove(backup_code)
                     join_hash = '#'.join(align_backup_code)
-                    userbackupcodes = User_BackUp_Codes.objects.get(id=current_user_backup_codes.id)
+                    userbackupcodes = User_BackUp_Codes.objects.get(id = current_user_backup_codes.id)
                     userbackupcodes.backup_codes = join_hash
                     userbackupcodes.save()
-                    user = User.objects.get(username = user.username)
                     user.is_active = True
                     user.save()
-                    get_LoginAttempt = UserLoginDetails.objects.filter(user__username=user).order_by('-created_at')[0]
+                    get_LoginAttempt = UserLoginDetails.objects.filter(user=user, attempt="Need to verify").order_by('-created_at')[0]
+                    update_LoginAttempt = UserLoginDetails.objects.get(id=get_LoginAttempt.id)
+                    update_LoginAttempt.attempt = "Success"
+                    update_LoginAttempt.reason = "Confirmed User via Backup Codes"
+                    update_LoginAttempt.save()
                     try:
-                        update_LoginAttempt = UserLoginDetails.objects.get(id=get_LoginAttempt.id)
-                        update_LoginAttempt.attempt = "Success"
-                        update_LoginAttempt.reason = "Confirmed User via Backup Codes"
-                        update_LoginAttempt.save()
-                    except UserLoginDetails.DoesNotExist:
-                        print("UserLoginDetails DoesNotExist")
+                        User_BackUp_Codes_Login_Attempts.objects.filter(user = user, status = "Failed").delete()
+                    except Exception:
+                        pass
+                    try:
+                        backup_codes = User_BackUp_Codes.objects.get(user = user)
+                    except User_BackUp_Codes.DoesNotExist:
+                        backup_codes = None
+                    if backup_codes == None:
+                        pass
+                    else:
+                        checkBackupCodesLength = len(backup_codes.backup_codes)
+                        if checkBackupCodesLength == 0:
+                            return redirect('delete_existing_backup_codes')
                     login(request, user)
                     messages.success(request, "Login Successful")
                     return redirect('login')
                 else:
-                    user_confirm = 2
-                    update_attempt_failed = User_BackUp_Codes_Login_Attempts(user = user, attempt = user_confirm, status = "Failed")
-                    update_attempt_failed.save()
-                    backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(user = user, status = "Failed").count()
+                    messages.info(request, "Invalid Backup Code")
+                    User_BackUp_Codes_Login_Attempts.objects.create(user = user, userIPAddr = ip, status = "Failed")
+                    backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(user = user, userIPAddr = ip, status = "Failed").count()
                     if backup_code_attempt_status_count > 4:
-                        suspicious_ip = User_IP_S_List(suspicious_list=ip)
-                        suspicious_ip.save()
+                        User_IP_S_List.objects.update_or_create(suspicious_list = ip)
+                        messages.info("Please confirm it's you to login")
+                        return redirect('login')
                     else:
-                        return redirect('verify_user_by_backup_codes', username=en_username)
+                        return redirect('verify_user_by_backup_codes', username = username)
             else:
                 context = {
-                    "custom_decrypted_username":custom_decrypted_username,
-                    "en_username":en_username,
+                    "custom_decrypted_username": dataUsername['DecryptedUsername'],
+                    "en_username": username,
                 }
                 return render(request, 'authentication/verifyItsYou/enter_backup_code.html', context)
     else:
-        messages.warning(request, "You don't have backup codes")
-        return redirect('verify_its_you', username=en_username)
+        messages.info(request, "You don't have backup codes")
+        return redirect('verify_its_you', username=username)
 
 def detect_spam_login(request, uid, spam_user_ip_address):
     twenty_four_hrs = pydt.datetime.now() - pydt.timedelta(days=1)
     if uid == None:
-        check_failed_login_attempts = UserLoginDetails.objects.filter(user_ip_address = spam_user_ip_address, attempt="Failed", reason="Connection is NOT secured", created_at__gte=twenty_four_hrs).count()
-        if check_failed_login_attempts > 0:
-            block_ip = User_IP_B_List(black_list=spam_user_ip_address)
-            block_ip.save()
-    elif uid != None:
-        check_failed_login_attempts = UserLoginDetails.objects.filter(user__username = uid, attempt="Failed", reason="Connection is NOT secured", created_at__gte=twenty_four_hrs).count()
-        if check_failed_login_attempts > 0:
+        if UserLoginDetails.objects.filter(user_ip_address = spam_user_ip_address, attempt = "Failed", reason = "Connection is NOT secured", created_at__gte=twenty_four_hrs).exists() is True:
+            User_IP_B_List.objects.create(black_list = spam_user_ip_address)
+        return http.HttpResponseForbidden('<h1>Forbidden</h1>')
+    else:
+        if UserLoginDetails.objects.filter(user__username = uid, user_ip_address = spam_user_ip_address, attempt = "Failed", reason = "Connection is NOT secured", created_at__gte = twenty_four_hrs).exists() is True:
             user = User.objects.get(username = uid)
-            block_ip = User_IP_B_List(black_list=spam_user_ip_address, login_user = user)
-            block_ip.save()
+            User_IP_B_List.objects.create(black_list=spam_user_ip_address, login_user = user)
             user.is_active = False
             user.save()
             current_site = get_current_site(request)
-            mail_subject = 'Re-Activate Your AkirA Account'
+            mail_subject = 'Re-activate your AkirA account'
             message = render_to_string('authentication/acc_active_email.html', {
                 'user': user,  
                 'domain': current_site.domain,  
-                'uid':urlsafe_base64_encode(force_bytes(user.pk)),
-                'token':account_activation_token.make_token(user),
+                'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+                'token': account_activation_token.make_token(user),
             })
             current_user = User.objects.get(username = uid)
             to_email = current_user.email
             email = EmailMessage(mail_subject, message, to=[to_email])
             email.send()
-            messages.warning(request, "Please Check Your Email Inbox")
+            messages.warning(request, "Please check your Email inbox")
             return http.HttpResponseForbidden('<h1>Forbidden</h1>')
 
 def activate(request, uidb64, token):
     User = get_user_model()  
-    try:  
+    try:
         uid = force_text(urlsafe_base64_decode(uidb64))
-        user = User.objects.get(pk=uid)  
+        user = User.objects.get(pk = uid)  
     except(TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
     if user is not None and account_activation_token.check_token(user, token): 
         user.is_active = True
         user.save()
-        return HttpResponse('Thank you for Re-Activating your account. Now you can login your account.')
+        return HttpResponse('Thank you for Re-activating your account. Now you can login your account.')
     else:  
-        return HttpResponse('Activation link is invalid!')
+        return HttpResponse('Link has been expired!')
 
 def twofa_verify_its_you(request, username):
-    custom_decrypted_username = ""
-    for i in range(len(username)):
-        custom_decrypted_username += chr(ord(username[i]) - 468)
+    try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
 
     try:
-        checkUserBackupCode = User_BackUp_Codes.objects.get(user__username = custom_decrypted_username)
+        checkUserBackupCode = User_BackUp_Codes.objects.get(user__username = dataUsername['DecryptedUsername'])
     except User_BackUp_Codes.DoesNotExist:
         checkUserBackupCode = None
-
-    try:
-        status_2fa = TwoFactorAuth.objects.get(user__username=custom_decrypted_username)
-    except TwoFactorAuth.DoesNotExist:
-        status_2fa = None
     
-    if (status_2fa != None) and status_2fa.twofa == True:
-        user = User.objects.get(username=custom_decrypted_username)
+    if TwoFactorAuth.objects.filter(user__username = dataUsername['DecryptedUsername'], twofa = True).exists() is True:
+        user = User.objects.get(username = dataUsername['DecryptedUsername'])
         first_name = user.first_name
         context = {
-            "username":user,
-            "encrypted_username":username,
-            "first_name":first_name,
-            "checkUserBackupCode":checkUserBackupCode,
+            "encrypted_username": username,
+            "username": dataUsername['DecryptedUsername'],
+            "first_name": first_name,
+            "checkUserBackupCode": checkUserBackupCode,
         }
         return render(request, 'authentication/twoFactorAuthentication/twofactorauth.html', context)
     else:
         messages.warning(request, "You haven't enabled 2FA!")
         return redirect('login')
 
-def twofa_verify_user_by_email(request, username):
-    custom_decrypted_username = ""
-    for i in range(len(username)):
-        custom_decrypted_username += chr(ord(username[i]) - 468)
+# def twofa_verify_user_by_email(request, username):
+#     try:
+#         url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+#         response = requests.get(url)
+#         dataUsername = response.json()
+#     except Exception:
+#         messages.info(request, "Server under maintenance. Please try again later.")
+#         return redirect('login')
 
-    try:
-        status_2fa = TwoFactorAuth.objects.get(user__username=custom_decrypted_username)
-    except TwoFactorAuth.DoesNotExist:
-        status_2fa = None
-    if (status_2fa != None) and status_2fa.twofa == True:
-        user = User.objects.get(username = custom_decrypted_username)
-        current_site = get_current_site(request)
-        mail_subject = "2FA Link via Email - AkirA"
-        message = render_to_string('authentication/twoFactorAuthentication/two_fac_auth_email.html', {
-            'user': user,  
-            'domain': current_site.domain,  
-            'uid':urlsafe_base64_encode(force_bytes(user.pk)),
-            'token':account_activation_token.make_token(user),
-        })
-        current_user = User.objects.get(username = custom_decrypted_username)
-        to_email = current_user.email
-        email = EmailMessage(mail_subject, message, to=[to_email])
-        email.send()
-        messages.info(request, "Please Check Your Email Inbox")
-        return redirect('login')
-    else:
-        messages.warning(request, "You haven't enabled 2FA!")
-        return redirect('login')
+#     if TwoFactorAuth.objects.filter(user__username = dataUsername['DecryptedUsername'], twofa = True).exists() is True:
+#         user = User.objects.get(username = dataUsername['DecryptedUsername'])
+#         current_site = get_current_site(request)
+#         mail_subject = "2FA Link via Email - AkirA"
+#         message = render_to_string('authentication/twoFactorAuthentication/two_fac_auth_email.html', {
+#             'user': user,
+#             'domain': current_site.domain,
+#             'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+#             'token': account_activation_token.make_token(user),
+#         })
+#         current_user = User.objects.get(username = dataUsername['DecryptedUsername'])
+#         to_email = current_user.email
+#         email = EmailMessage(mail_subject, message, to=[to_email])
+#         email.send()
+#         loginAlert2FAContent = {
+#             "username": username,
+#         }
+#         return render(request, 'authentication/twoFactorAuthentication/loginAlert2FA.html', loginAlert2FAContent)
+#     else:
+#         messages.warning(request, "You haven't enabled 2FA!")
+#         return redirect('login')
 
-def twofacauth_email(request, uidb64, token):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
-    else:
-        ip = request.META.get('REMOTE_ADDR')
+# def twofacauth_email(request, uidb64, token):
+#     User = get_user_model()
+#     try:  
+#         uid = force_text(urlsafe_base64_decode(uidb64))
+#         user = User.objects.get(pk=uid)  
+#     except(TypeError, ValueError, OverflowError, User.DoesNotExist):
+#         user = None
+#     if user is not None and account_activation_token.check_token(user, token):
+#         user.is_active = True
+#         user.save()
+#         getCurrentLogin = UserLoginDetails.objects.filter(user__username = user, attempt = "Not Confirmed Yet!").order_by('-created_at')[0]
+#         UpdateCurrentLoginAttepmt = UserLoginDetails.objects.get(id=getCurrentLogin.id)
+#         UpdateCurrentLoginAttepmt.attempt = "Success"
+#         UpdateCurrentLoginAttepmt.reason = "Verified via 2FA Email Link"
+#         UpdateCurrentLoginAttepmt.save()
+#         return HttpResponse("Thank you for confirming your Login")
+#     else:
+#         logout(request)
+#         messages.warning(request, "Link has been expired!")
+#         return redirect('login')
 
-    User = get_user_model()
-    try:  
-        uid = force_text(urlsafe_base64_decode(uidb64))
-        user = User.objects.get(pk=uid)  
-    except(TypeError, ValueError, OverflowError, User.DoesNotExist):
-        user = None
-    if user is not None and account_activation_token.check_token(user, token):
-        user.is_active = True
-        user.save()
-        get_user_ip_address = UserLoginDetails.objects.filter(user__username=user).order_by('-created_at')[0]
-        if str(ip) == str(get_user_ip_address.user_ip_address):
-            getCurrentLogin = UserLoginDetails.objects.filter(user__username = user).order_by('-created_at')[0]
-            UpdateCurrentLoginAttepmt = UserLoginDetails.objects.get(id=getCurrentLogin.id)
-            UpdateCurrentLoginAttepmt.attempt = "Success"
-            UpdateCurrentLoginAttepmt.reason = "Verified via 2FA Email Link"
-            UpdateCurrentLoginAttepmt.save()
-            login(request, user)
-            messages.success(request, "Login Successful")
-            return redirect('login')
-        else:
-            user.is_active = False
-            user.save()
-            getCurrentLogin = UserLoginDetails.objects.filter(user__username = user).order_by('-created_at')[0]
-            UpdateCurrentLoginAttepmt = UserLoginDetails.objects.get(id=getCurrentLogin.id)
-            UpdateCurrentLoginAttepmt.attempt = "Failed"
-            UpdateCurrentLoginAttepmt.reason = "User opened the link from different IP Address"
-            UpdateCurrentLoginAttepmt.save()
-            logout(request)
-            messages.warning(request, "You don't have access!")
-            return redirect('login')
-    else:
-        logout(request)
-        messages.warning(request, "Link Expired!")
-        return redirect('login')
+# def confirm2FAEmailStatus(request, username):
+#     try:
+#         url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+#         response = requests.get(url)
+#         dataUsername = response.json()
+#     except Exception:
+#         messages.info(request, "Server under maintenance. Please try again later.")
+#         return redirect('login')
+
+#     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+#     if x_forwarded_for:
+#         ip = x_forwarded_for.split(',')[0]
+#     else:
+#         ip = request.META.get('REMOTE_ADDR')
+
+#     if UserLoginDetails.objects.filter(user_ip_address = ip,
+#                                         user__username = dataUsername['DecryptedUsername'],
+#                                         attempt = "Success",
+#                                         reason = "Verified via 2FA Email Link").exists() is True:
+#         user = User.objects.get(username = dataUsername['DecryptedUsername'])
+#         messages.success(request, "Login Successful")
+#         login(request, user)
+#         data = {
+#             'status': 'success',
+#         }
+#     else:
+#         logout(request)
+#         data = {
+#             'status': 'failed',
+#         }
+#     response = JsonResponse(data)
+#     return response
 
 def twofa_verify_user_by_backup_codes(request, username):
-    custom_decrypted_username = ""
-    for i in range(len(username)):
-        custom_decrypted_username += chr(ord(username[i]) - 468)
     try:
-        status_2fa = TwoFactorAuth.objects.get(user__username=custom_decrypted_username)
-    except TwoFactorAuth.DoesNotExist:
-        status_2fa = None
-    current_user_2fa_status = 0
-    if (status_2fa != None) and (status_2fa.twofa == 0):
-        current_user_2fa_status = 0
-    elif (status_2fa != None) and (status_2fa.twofa == 1):
-        current_user_2fa_status = 1
-    else:
-        current_user_2fa_status = 0
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
 
-    user = User.objects.get(username=custom_decrypted_username)
-    if (user.is_active == True) and (current_user_2fa_status == 0):
+    user = User.objects.get(username = dataUsername['DecryptedUsername'])
+    if TwoFactorAuth.objects.filter(user__username = dataUsername['DecryptedUsername'], twofa = False).exists() is True:
         return redirect('login')
     else:
-        user = User.objects.get(username = custom_decrypted_username)
+        user = User.objects.get(username = dataUsername['DecryptedUsername'])
         if request.method == 'POST':
             x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
             if x_forwarded_for:
                 ip = x_forwarded_for.split(',')[0]
             else:
                 ip = request.META.get('REMOTE_ADDR')
-            user_confirm = 0
             backup_code = request.POST.get('backup_code')
             current_user_backup_codes = User_BackUp_Codes.objects.get(user=user)
             backup_codes_with_hash = current_user_backup_codes.backup_codes
@@ -677,67 +667,60 @@ def twofa_verify_user_by_backup_codes(request, username):
             for i in splitup_backup_codes:
                 align_backup_code.append(i)
             if backup_code in align_backup_code:
-                user_confirm = 1
                 align_backup_code.remove(backup_code)
                 join_hash = '#'.join(align_backup_code)
-                userbackupcodes = User_BackUp_Codes.objects.get(id=current_user_backup_codes.id)
+                userbackupcodes = User_BackUp_Codes.objects.get(id = current_user_backup_codes.id)
                 userbackupcodes.backup_codes = join_hash
                 userbackupcodes.save()
-                user = User.objects.get(username = user.username)
                 user.is_active = True
                 user.save()
+                get_LoginAttempt = UserLoginDetails.objects.filter(user=user, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
+                update_LoginAttempt = UserLoginDetails.objects.get(id=get_LoginAttempt.id)
+                update_LoginAttempt.attempt = "Success"
+                update_LoginAttempt.reason = "Confirmed User via 2FA Backup Codes"
+                update_LoginAttempt.save()
                 try:
-                    user_backup_code_la = User_BackUp_Codes_Login_Attempts.objects.get(user__username=custom_decrypted_username)
-                except User_BackUp_Codes_Login_Attempts.DoesNotExist:
-                    user_backup_code_la = None
-                if user_backup_code_la == None:
-                    create_attempt_success = User_BackUp_Codes_Login_Attempts(user = user, attempt = user_confirm, status = "Success")
-                    create_attempt_success.save()
-                else:
-                    get_user_bcla = User_BackUp_Codes_Login_Attempts.objects.get(user__username=custom_decrypted_username)
-                    get_user_bcla.attempt = user_confirm
-                    get_user_bcla.status = "Success"
-                    get_user_bcla.save()
-                
-                get_LoginAttempt = UserLoginDetails.objects.filter(user__username=user).order_by('-created_at')[0]
-                try:
-                    update_LoginAttempt = UserLoginDetails.objects.get(id=get_LoginAttempt.id)
-                    update_LoginAttempt.attempt = "Success"
-                    update_LoginAttempt.reason = "Confirmed User via 2FA Backup Codes"
-                    update_LoginAttempt.save()
-                except UserLoginDetails.DoesNotExist:
-                    print("UserLoginDetails DoesNotExist")
+                    User_BackUp_Codes_Login_Attempts.objects.filter(user = user, status = "Failed").delete()
+                except Exception:
+                    pass
                 login(request, user)
+                messages.success(request, "Login Successful")
                 return redirect('login')
             else:
-                user_confirm = 2
-                update_attempt_failed = User_BackUp_Codes_Login_Attempts(user = user, attempt = user_confirm, status = "Failed")
-                update_attempt_failed.save()
-                backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(user = user, status = "Failed").count()
+                messages.info(request, "Invalid Backup Code")
+                User_BackUp_Codes_Login_Attempts.objects.create(user = user, userIPAddr = ip, status = "Failed")
+                backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(user = user, userIPAddr = ip, status = "Failed").count()
                 if backup_code_attempt_status_count > 4:
-                    block_ip = User_IP_B_List(black_list=ip)
-                    block_ip.save()
+                    User_IP_S_List.objects.update_or_create(suspicious_list = ip)
+                    messages.info("Please confirm it's you to login")
+                    return redirect('login')
                 else:
-                    return redirect('twofa_verify_user_by_backup_codes', username=username)
-        else:
-            context = {
-                "custom_decrypted_username":custom_decrypted_username,
-                "encrypted_username":username,
-            }
-            return render(request, 'authentication/twoFactorAuthentication/two_fac_enter_backup_code.html', context)
+                    return redirect('twofa_verify_user_by_backup_codes', username = username)
+        context = {
+            "custom_decrypted_username": dataUsername['DecryptedUsername'],
+            "encrypted_username": username,
+        }
+        return render(request, 'authentication/twoFactorAuthentication/two_fac_enter_backup_code.html', context)
 
 def confirmUserLogin(request, username):
     try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
+    try:
         get_attempt_ARU = UserLoginDetails.objects.get(
-                        user__username=username, 
-                        attempt="Manual Confirmation Required",
+                        user__username = dataUsername['DecryptedUsername'],
+                        attempt = "Manual Confirmation Required",
                         reason = "Login is unusual",
                         user_confirm = "Pending due to unusual login")
     except UserLoginDetails.DoesNotExist:
         get_attempt_ARU = None
     if get_attempt_ARU:
         context = {
-            "username":username,
+            "username": username,
         }
         return render(request, 'authentication/confirmUserLogin.html', context)
     else:
@@ -746,27 +729,35 @@ def confirmUserLogin(request, username):
 
 def secure_account(request, username, user_response):
     try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
+
+    try:
         get_attempt_ARU = UserLoginDetails.objects.get(
-                        user__username=username, 
-                        attempt="Manual Confirmation Required",
+                        user__username = dataUsername['DecryptedUsername'], 
+                        attempt = "Manual Confirmation Required",
                         reason = "Login is unusual",
                         user_confirm = "Pending due to unusual login")
     except UserLoginDetails.DoesNotExist:
         get_attempt_ARU = None
-    if get_attempt_ARU != None:
+    if get_attempt_ARU:
         get_attempt_ARU = UserLoginDetails.objects.get(
-                        user__username=username, 
-                        attempt="Manual Confirmation Required",
+                        user__username = dataUsername['DecryptedUsername'], 
+                        attempt = "Manual Confirmation Required",
                         reason = "Login is unusual",
                         user_confirm = "Pending due to unusual login")
-        if get_attempt_ARU.user.username == username:
+        if get_attempt_ARU.user.username == dataUsername['DecryptedUsername']:
             if user_response == "yes":
-                get_attempt_ARU = UserLoginDetails.objects.filter(user__username=username, attempt="Manual Confirmation Required").order_by('-created_at')[0]
+                get_attempt_ARU = UserLoginDetails.objects.filter(user__username = dataUsername['DecryptedUsername'], attempt = "Manual Confirmation Required").order_by('-created_at')[0]
                 get_attempt_ARU.attempt = "Success"
                 get_attempt_ARU.user_confirm = "Login Confirmed"
                 get_attempt_ARU.reason = "Login Confirmed via Email Manually"
                 get_attempt_ARU.save()
-                user = User.objects.get(username = username)
+                user = User.objects.get(username = dataUsername['DecryptedUsername'])
                 user.is_active = True
                 user.save()
                 return redirect('login')
@@ -781,23 +772,30 @@ def secure_account(request, username, user_response):
         return redirect('login')
 
 def checkUserResponse(request, username):
+    try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
+
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
-        # ip = '128.0.0.1'
     else:
         ip = request.META.get('REMOTE_ADDR')
-        # ip = '128.0.0.1'
     try:
         userLoginDetails = UserLoginDetails.objects.get(
-                        user__username=username, 
-                        attempt="Success",
+                        user__username = dataUsername['DecryptedUsername'], 
+                        attempt = "Success",
+                        user_ip_address = ip,
                         user_confirm = "Login Confirmed",
                         reason = "Login Confirmed via Email Manually")
     except UserLoginDetails.DoesNotExist:
         userLoginDetails = None
-    if (userLoginDetails != None) and (userLoginDetails.user_ip_address == ip):
-        user = User.objects.get(username = username)
+    if (userLoginDetails) and (userLoginDetails.user_ip_address == ip):
+        user = User.objects.get(username = dataUsername['DecryptedUsername'])
         login(request, user)
         data = {
             'status': 'success',
@@ -826,97 +824,216 @@ def requestSwitchDevice(request):
     res = re.findall(r'\(.*?\)', user_agent)
     OS_Details = res[0][1:-1]
 
-    if request.method == 'POST':
-        currentUserIPAddr = request.POST.get('user_ip_address')
-        currentUserBrowser = request.POST.get('user_browser')
-        currentUserOS = request.POST.get('user_os')
-        currentUsername = request.POST.get('username')
-        getUserObject = User.objects.get(username = currentUsername)
-        try:
-            SwitchDevice.objects.create(
-                    userIPAddr = currentUserIPAddr,
-                    userBrowser = currentUserBrowser,
-                    userOS = currentUserOS,
-                    reason = "Not Approved Yet",
-                    user = getUserObject)
-        except IntegrityError:
-            messages.info(request, "You have already requested to switch device!")
-            print("You have already requested to switch device!")
+    if User_IP_S_List.objects.filter(suspicious_list = ip).exists() is True:
+        messages.warning("We can't process your Switch Device request")
+        return redirect('login')
+    else:
+        if request.method == 'POST':
+            currentUsername = request.POST.get('username')
+            try:
+                captcha_token = request.POST.get("g-recaptcha-response")
+                cap_url = "https://www.google.com/recaptcha/api/siteverify"
+                cap_secret = settings.GOOGLE_RECAPTCHA_SECRET_KEY
+                cap_data = {"secret": cap_secret, "response": captcha_token}
+                cap_server_response = requests.post(url = cap_url, data = cap_data)
+                cap_json = json.loads(cap_server_response.text)
+            except Exception:
+                messages.info(request, 'Check your internet connection')
+                return redirect('requestSwitchDevice')
+            if not cap_json['success'] is True:
+                messages.info(request, "Invalid reCaptcha!")
+                return redirect('requestSwitchDevice')
+            else:
+                try:
+                    getUserObject = User.objects.get(username = currentUsername)
+                except User.DoesNotExist:
+                    messages.info(request, "Account doesn't exists!")
+                    return redirect('requestSwitchDevice')
+                try:
+                    url = 'https://akira-rest-api.herokuapp.com/getEncryptionData/{}/?format=json'.format(currentUsername)
+                    response = requests.get(url)
+                    dataUsername = response.json()
+                except Exception:
+                    messages.info(request, "Server under maintenance. Please try again later.")
+                    return redirect('requestSwitchDevice')
 
-        PostContext = {
-            "currentUsername":currentUsername,
-        }
-        return render(request, 'authentication/SwitchDevice/waitingSwitchDeviceResponse.html', PostContext)
-    context = {
-        "CurrentUserIPAddr":ip,
-        "CurrentBrowser":browser,
-        "CurrentOS":OS_Details,
-    }
-    return render(request, 'authentication/SwitchDevice/requestSwitchDevice.html', context)
-
-def validateSwitchDevice(request):
-    try:
-        get_SwitchDeviceRequest = SwitchDevice.objects.get(
-                                            user__username=request.user.username,
-                                            reason = "Not Approved Yet",
-                                            userConfirm = "Pending")
-    except SwitchDevice.DoesNotExist:
-        get_SwitchDeviceRequest = None
-    if request.method == "POST":
-        if get_SwitchDeviceRequest != None:
-            get_SwitchDeviceRequest = SwitchDevice.objects.get(
-                            user__username=request.user.username,
+                ten_minutes_ago = pydt.datetime.now() + pydt.timedelta(minutes=-10)
+                if SwitchDevice.objects.filter(user = getUserObject, reason = "Not Approved Yet", created_at__gte = ten_minutes_ago).exists() is True:
+                    messages.info(request, "You have already requested to switch device!")
+                    getReqSDObj = SwitchDevice.objects.get(user = getUserObject, userIPAddr = ip, reason = "Not Approved Yet")
+                    if SwitchDevice.objects.filter(user = getUserObject, userIPAddr = ip, reason = "Not Approved Yet").exists() is True:
+                        return redirect('waitingSwitchDeviceResponse', switchDeviceReqID = getReqSDObj.id, username = dataUsername['EncryptedUsername'])
+                    else:
+                        return redirect('requestSwitchDevice')
+                # elif SwitchDevice.objects.filter(user = getUserObject, reason = "Not Approved Yet").exists() is True:
+                #     SwitchDevice.objects.filter(user = getUserObject, reason = "Not Approved Yet").delete()
+                #     switchDeviceObj = SwitchDevice.objects.create(
+                #             userIPAddr = ip,
+                #             userBrowser = browser,
+                #             userOS = OS_Details,
+                #             reason = "Not Approved Yet",
+                #             user = getUserObject)
+                #     switchDeviceID = SwitchDevice.objects.get(id = switchDeviceObj.id)
+                #     return redirect('waitingSwitchDeviceResponse', switchDeviceReqID = switchDeviceID.id,  username = dataUsername['EncryptedUsername'])
+                elif SwitchDevice.objects.filter(user = getUserObject, status = "Switch Device Successful").exists() is True:
+                    messages.error(request, "Terminate the active session in order to make new Switch Device request")
+                    return redirect('requestSwitchDevice')
+                else:
+                    switchDeviceObj = SwitchDevice.objects.create(
+                            userIPAddr = ip,
+                            userBrowser = browser,
+                            userOS = OS_Details,
                             reason = "Not Approved Yet",
-                            userConfirm = "Pending")
-            if get_SwitchDeviceRequest.user.username == request.user.username:
-                getLastPage = UserPageVisits.objects.filter(user__username=request.user.username).order_by('-created_at')[0]
-                update_SwitchDeviceRequest = SwitchDevice.objects.filter(user__username=request.user.username, 
-                                                            reason = "Not Approved Yet",
-                                                            userConfirm = "Pending",
-                                                            status="Switch Device Pending").order_by('-created_at')[0]
-                update_SwitchDeviceRequest.userConfirm = "User Approved"
-                update_SwitchDeviceRequest.reason = "User Confirmed the Switch Device"
-                update_SwitchDeviceRequest.currentPage = getLastPage.currentPage
-                update_SwitchDeviceRequest.save()
-                user = User.objects.get(username = request.user.username)
-                user.is_active = True
-                user.save()
-                # return HttpResponse("Your Approval Request is been taken successfully")
-                postContext = {
-                    "get_SwitchDeviceRequest":get_SwitchDeviceRequest,
-                    "SwitchDeviceStatus":True,
-                }
-                return render(request, 'authentication/SwitchDevice/acceptSwitchDevice.html', postContext)
+                            user = getUserObject)
+                    switchDeviceID = SwitchDevice.objects.get(id = switchDeviceObj.id)
+                    return redirect('waitingSwitchDeviceResponse', switchDeviceReqID = switchDeviceID.id,  username = dataUsername['EncryptedUsername'])
+        context = {
+            "GOOGLE_RECAPTCHA_PUBLIC_KEY": settings.GOOGLE_RECAPTCHA_PUBLIC_KEY,
+        }
+        return render(request, 'authentication/SwitchDevice/requestSwitchDevice.html', context)
+
+def waitingSwitchDeviceResponse(request, switchDeviceReqID, username):
+    try:
+        checkSDAOT = SwitchDevice.objects.get(id = switchDeviceReqID)
+    except SwitchDevice.DoesNotExist:
+        messages.error(request, "Switch Device Request doesn't exists!")
+        return redirect('requestSwitchDevice')
+    
+    if checkSDAOT:
+        if checkSDAOT.status == "Terminated":
+            messages.error(request, "Switch Device request is closed!")
+            return redirect('requestSwitchDevice')
+
+    try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
+
+    context = {
+        "currentUsername": username,
+        "plainUsername": dataUsername['DecryptedUsername'],
+        "switchDeviceID": switchDeviceReqID,
+    }
+    return render(request, 'authentication/SwitchDevice/waitingSwitchDeviceResponse.html', context)
+
+@login_required(login_url=settings.LOGIN_URL)
+def validateSwitchDevice(request):
+    getSwitchDeviceRequests = SwitchDevice.objects.filter(user = request.user).order_by('-created_at')
+    try:
+        currentSDReq = SwitchDevice.objects.get(user = request.user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
+    except SwitchDevice.DoesNotExist:
+        try:
+            currentSDReq = SwitchDevice.objects.get(user = request.user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Pending")
+        except SwitchDevice.DoesNotExist:
+            try:
+                currentSDReq = SwitchDevice.objects.get(user = request.user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful")
+            except SwitchDevice.DoesNotExist:
+                currentSDReq = None
+
+    if request.method == "POST":
+        if currentSDReq.user == request.user:
+            getLastPage = UserPageVisits.objects.filter(user = request.user).order_by('-created_at')[0]
+            update_currentSDReq = currentSDReq
+            update_currentSDReq.userConfirm = "User Approved"
+            update_currentSDReq.reason = "User Confirmed the Switch Device"
+            update_currentSDReq.currentPage = getLastPage.currentPage
+            update_currentSDReq.status = "Switch Device Pending"
+            update_currentSDReq.save()
+            user = User.objects.get(username = request.user.username)
+            user.is_active = True
+            user.save()
+            messages.info(request, "Your approval request is been taken")
+            return redirect('validateSwitchDevice')
         else:
             logout(request)
             return HttpResponse("No Switch Device Request Found!")
-    Context = {
-        "get_SwitchDeviceRequest":get_SwitchDeviceRequest,
-        "SwitchDeviceStatus":False,
+    context = {
+        "currentSDReq": currentSDReq,
+        "getSwitchDeviceRequests": getSwitchDeviceRequests,
     }
-    return render(request, 'authentication/SwitchDevice/acceptSwitchDevice.html', Context)
+    return render(request, 'authentication/SwitchDevice/acceptSwitchDevice.html', context)
 
-def checkValidatedSwitchDeviceRequest(request, username):
+@login_required(login_url=settings.LOGIN_URL)
+def denySwitchDevice(request, switchDeviceReqID):
+    update_currentSDReq = SwitchDevice.objects.get(id = switchDeviceReqID, user__username = request.user.username)
+    update_currentSDReq.userConfirm = "User Denied"
+    update_currentSDReq.reason = "User Denied the Switch Device"
+    update_currentSDReq.status = "Terminated"
+    update_currentSDReq.save()
+    messages.info(request, "Your Denied Request is been taken successfully")
+    return redirect('validateSwitchDevice')
+
+def checkValidatedSwitchDeviceRequest(request, username, switchDeviceID):
+    try:
+        currentSDObj = SwitchDevice.objects.get(id=switchDeviceID)
+    except SwitchDevice.DoesNotExist:
+        currentSDObj = None
+        messages.error(request, "Switch Device request is expired")
+
+    getCurrentSDReqOvertimeObj = False
+    try:
+        getCurrentSDReqOvertime = SwitchDevice.objects.get(id=switchDeviceID)
+        eleven_minutes = getCurrentSDReqOvertime.created_at + pydt.timedelta(minutes=+11)
+    except Exception:
+        getCurrentSDReqOvertime = None
+    if (getCurrentSDReqOvertime) and (pydt.datetime.now() >= eleven_minutes):
+        getCurrentSDReqOvertime.delete()
+        getCurrentSDReqOvertimeObj = True
+        messages.error(request, "Switch Device request is expired")
+
+    try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')    
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
     else:
         ip = request.META.get('REMOTE_ADDR')
+    
     try:
-        GetSwitchDeviceRequestObject = SwitchDevice.objects.get(
-                        user__username=username, 
+        GetSwitchDeviceRequestObjectUD = SwitchDevice.objects.get(
+                        id = switchDeviceID,
+                        user__username=dataUsername['DecryptedUsername'],
+                        status = "Terminated")
+        messages.error(request, "Switch Device request is expired")
+    except SwitchDevice.DoesNotExist:
+        GetSwitchDeviceRequestObjectUD = None
+
+    try:
+        getCurrentSDReq = SwitchDevice.objects.get(
+                        id = switchDeviceID,
+                        user__username=dataUsername['DecryptedUsername'], 
                         userConfirm = "User Approved",
                         reason = "User Confirmed the Switch Device",
-                        status="Switch Device Pending")
+                        status = "Switch Device Pending")
     except SwitchDevice.DoesNotExist:
-        GetSwitchDeviceRequestObject = None
-    if (GetSwitchDeviceRequestObject != None) and (GetSwitchDeviceRequestObject.userIPAddr == ip):
-        user = User.objects.get(username = username)
-        currentUrl = GetSwitchDeviceRequestObject.currentPage
+        getCurrentSDReq = None
+
+    if (getCurrentSDReq) and (getCurrentSDReq.userIPAddr == ip):
+        user = User.objects.get(username = dataUsername['DecryptedUsername'])
+        currentUrl = getCurrentSDReq.currentPage
         login(request, user)
         data = {
             'status': 'success',
-            'redirect_url':currentUrl,
+            'redirect_url': currentUrl,
+        }
+    elif (GetSwitchDeviceRequestObjectUD) and (GetSwitchDeviceRequestObjectUD.userIPAddr == ip):
+        logout(request)
+        data = {
+            'status': 'failed',
+            'message': 'User Denied',
+        }
+    elif getCurrentSDReqOvertimeObj is True or currentSDObj is None:
+        data = {
+            'status': 'failed',
+            'message': 'Request Expired',
         }
     else:
         logout(request)
@@ -927,51 +1044,100 @@ def checkValidatedSwitchDeviceRequest(request, username):
     return response
 
 def SwitchDeviceStatus(request, username):
+    try:
+        url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
+        response = requests.get(url)
+        dataUsername = response.json()
+    except Exception:
+        messages.info(request, "Server under maintenance. Please try again later.")
+        return redirect('login')
+
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
     else:
         ip = request.META.get('REMOTE_ADDR')
     try:
-        GetSwitchDeviceRequestObject = SwitchDevice.objects.get(
-                        user__username=username, 
+        getCurrentSDReq = SwitchDevice.objects.get(
+                        user__username = dataUsername['DecryptedUsername'], 
                         userConfirm = "User Approved",
                         reason = "User Confirmed the Switch Device",
-                        status="Switch Device Pending")
+                        status = "Switch Device Pending")
     except SwitchDevice.DoesNotExist:
-        GetSwitchDeviceRequestObject = None
-    if (GetSwitchDeviceRequestObject != None) and (GetSwitchDeviceRequestObject.userIPAddr == ip):
-        update_SwitchDeviceStatus = SwitchDevice.objects.filter(user__username=request.user.username, 
-                                                    reason = "User Confirmed the Switch Device",
-                                                    userConfirm = "User Approved",
-                                                    status="Switch Device Pending").order_by('-created_at')[0]
-        update_SwitchDeviceStatus.userIPAddr = ip
-        update_SwitchDeviceStatus.status = "Switch Device Successful"
-        update_SwitchDeviceStatus.save()
+        getCurrentSDReq = None
+    if (getCurrentSDReq) and (getCurrentSDReq.userIPAddr == ip):
+        updateCurrentSDReq = getCurrentSDReq
+        updateCurrentSDReq.userIPAddr = ip
+        updateCurrentSDReq.status = "Switch Device Successful"
+        updateCurrentSDReq.save()
         return "Switch Device Successful"
     else:
         return HttpResponse("No Switch Device Request Found!")
 
-def listSwitchDevice(request):
-    SwitchDeviceList = SwitchDevice.objects.filter(user__username = request.user.username)
-    return JsonResponse({'SwitchDeviceList': list(SwitchDeviceList.values())})
-
-def SyncDevice(request):
-    getSecondDevice = SwitchDevice.objects.filter(
-                            user__username = request.user.username,
-                            status = "Switch Device Successful",
-                            userConfirm = "User Approved").order_by('-created_at')[0]
-    getSecondDeviceCurrentPage = UserPageVisits.objects.filter(
-                                user__username = request.user.username,
-                                userIPAddr = getSecondDevice.userIPAddr).order_by('-created_at')[0]
-    return redirect(getSecondDeviceCurrentPage.currentPage)
-
-
-# SwitchDevice.objects.all().delete()
-# UserPageVisits.objects.all().delete()
+@login_required(login_url=settings.LOGIN_URL)
+def SyncDevice(request, switchDeviceID):
+    try:
+        getCurrentSDReq = SwitchDevice.objects.get(id = switchDeviceID, status = "Terminated")
+    except SwitchDevice.DoesNotExist:
+        getCurrentSDReq = None
+    if getCurrentSDReq == None:
+        getSecondDevice = SwitchDevice.objects.filter(
+                                user = request.user,
+                                userConfirm = "User Approved",
+                                status = "Switch Device Successful",
+                                reason = "User Confirmed the Switch Device").order_by('-created_at')[0]
+        getSecondDeviceCurrentPage = UserPageVisits.objects.filter(
+                                    user = request.user,
+                                    userIPAddr = getSecondDevice.userIPAddr).order_by('-created_at')[0]
+        return redirect(getSecondDeviceCurrentPage.currentPage)
+    else:
+        messages.error(request, "Switch Device is terminated")
+        return redirect('validateSwitchDevice')
 
 def logoutUser(request):
-    if request.user.is_authenticated:
+    currentSDUAUCSDSDS = SwitchDevice.objects.filter(user = request.user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful").exists()
+    currentSDPNA = SwitchDevice.objects.filter(user = request.user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending").exists()
+    if (request.user.is_authenticated) and (TwoFactorAuth.objects.filter(user = request.user, twofa = False).exists() is True):
+        UserPageVisits.objects.filter(user = request.user).delete()
+        if currentSDUAUCSDSDS is True:
+            updatecurrentSDUAUCSDSDS = SwitchDevice.objects.get(user = request.user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful")
+            updatecurrentSDUAUCSDSDS.reason = "User Logged Out"
+            updatecurrentSDUAUCSDSDS.status = "Terminated"
+            updatecurrentSDUAUCSDSDS.save()
+        if currentSDPNA is True:
+            updatecurrentSDPNA = SwitchDevice.objects.get(user = request.user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
+            updatecurrentSDPNA.userConfirm = "User Denied"
+            updatecurrentSDPNA.reason = "User Logged Out"
+            updatecurrentSDPNA.status = "Terminated"
+            updatecurrentSDPNA.save()
+
+        logout(request)
+        return redirect('login')
+    elif (request.user.is_authenticated) and (TwoFactorAuth.objects.filter(user = request.user, twofa = True).exists() is True):
+        UserPageVisits.objects.filter(user = request.user).delete()
+        if currentSDUAUCSDSDS is True:
+            updatecurrentSDUAUCSDSDS = SwitchDevice.objects.get(user = request.user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful")
+            updatecurrentSDUAUCSDSDS.reason = "User Logged Out"
+            updatecurrentSDUAUCSDSDS.status = "Terminated"
+            updatecurrentSDUAUCSDSDS.save()
+        if currentSDPNA is True:
+            updatecurrentSDPNA = SwitchDevice.objects.get(user = request.user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
+            updatecurrentSDPNA.userConfirm = "User Denied"
+            updatecurrentSDPNA.reason = "User Logged Out"
+            updatecurrentSDPNA.status = "Terminated"
+            updatecurrentSDPNA.save()
+        try:
+            UBC = User_BackUp_Codes.objects.get(user = request.user)
+            if UBC.download == False:
+                messages.info(request, "Please Download Backup codes")
+                return redirect('account_settings')
+            else:
+                logout(request)
+                return redirect('login')
+        except User_BackUp_Codes.DoesNotExist:
+            messages.info(request, "Please generate Backup codes")
+            return redirect('account_settings')
+    elif (request.user.is_authenticated):
         logout(request)
         return redirect('login')
     else:

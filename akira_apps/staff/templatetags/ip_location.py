@@ -9,8 +9,9 @@ def ip_location(value):
         url = 'https://ipinfo.io/{}/geo'.format(value)
         response = requests.get(url)
         data = response.json()
-        if (data['bogon'] == True):
-            city_region_country = 'Unknown'
+        if (data['ip'] == '127.0.0.1'):
+            if (data['bogon'] == True):
+                city_region_country = 'Localhost'
         else:
             city_region_country = data['city'] + ', ' + data['region'] + ', ' + data['country']
         return city_region_country

@@ -90,21 +90,26 @@ def assign_user_group(request, staff_username):
     else:
         return redirect('manage_staff')
 
+# new_group, created = Group.objects.get_or_create(name ='Administrator')
+# new_group, created = Group.objects.get_or_create(name ='Head of the Department')
+# new_group, created = Group.objects.get_or_create(name ='Professor')
+# new_group, created = Group.objects.get_or_create(name ='Associate Professor')
+# new_group, created = Group.objects.get_or_create(name ='Assistant Professor')
+# new_group, created = Group.objects.get_or_create(name ='Student')
+
 # group_name = 'Student'
 # group_name = 'Staff'
 # group_name = 'Head of the Department'
 # group_name = 'Course Co-Ordinator'
 # group_name = 'Administrator'
 # my_group = Group.objects.get(name='%s' % str(group_name))
-# user = User.objects.get(username = '4akhi')
+# user = User.objects.get(username = '4akhilkumar')
 # my_group.user_set.add(user)
-# print("Success")
-
-# user = User.objects.get(id=1)
 # user.first_name = 'Sai Akhil Kumar Reddy'
 # user.last_name = 'N'
 # user.email = '4akhilkumar@gmail.com'
 # user.save()
+# print("Success")
 
 # userI = User.objects.create_user(username='hari.vege')
 # userI.first_name = 'Hari Kiran'
@@ -131,11 +136,3 @@ def assign_user_group(request, staff_username):
 # staff = Staff.objects.get(user=get_user)
 # staff.name_prefix = 'Dr'
 # staff.save()
-
-
-# new_group, created = Group.objects.get_or_create(name ='Administrator')
-# new_group, created = Group.objects.get_or_create(name ='Head of the Department')
-# new_group, created = Group.objects.get_or_create(name ='Professor')
-# new_group, created = Group.objects.get_or_create(name ='Associate Professor')
-# new_group, created = Group.objects.get_or_create(name ='Assistant Professor')
-# new_group, created = Group.objects.get_or_create(name ='Student')
