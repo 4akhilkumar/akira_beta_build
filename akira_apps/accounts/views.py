@@ -90,10 +90,10 @@ def account_settings(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     
-    if UserLoginDetails.objects.filter(user__username = request.user.username).count() > 2:
+    if UserLoginDetails.objects.filter(user__username = request.user.username).count() >= 2:
         get_PreviousLoginInfo = UserLoginDetails.objects.filter(user__username = request.user.username, attempt="Success").order_by('-created_at')[1]
     else:
-        get_PreviousLoginInfo = 0
+        get_PreviousLoginInfo = None
     
     if get_currentLoginInfo.user_ip_address == ip and \
         get_currentLoginInfo.browser_details == browser and \
