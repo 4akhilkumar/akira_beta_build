@@ -97,42 +97,24 @@ def assign_user_group(request, staff_username):
 # new_group, created = Group.objects.get_or_create(name ='Assistant Professor')
 # new_group, created = Group.objects.get_or_create(name ='Student')
 
-# group_name = 'Student'
-# group_name = 'Staff'
-# group_name = 'Head of the Department'
-# group_name = 'Course Co-Ordinator'
-# group_name = 'Administrator'
-# my_group = Group.objects.get(name='%s' % str(group_name))
-# user = User.objects.get(username = '4akhilkumar')
-# my_group.user_set.add(user)
+# if User.objects.filter(username='4akhilkumar').exists() is True:
+#     user = User.objects.get(username = '4akhilkumar')
+# else:
+#     user = User.objects.create_user(username='4akhilkumar')
 # user.first_name = 'Sai Akhil Kumar Reddy'
 # user.last_name = 'N'
 # user.email = '4akhilkumar@gmail.com'
+# user.set_password("AKIRAaccount@21")
+# user.is_active = True
+# user.is_staff = True
+# user.is_superuser = True
 # user.save()
+
+# group_name = 'Administrator'
+# my_group = Group.objects.get(name='%s' % str(group_name))
+# my_group.user_set.add(user)
 # print("Success")
 
-# userI = User.objects.create_user(username='hari.vege')
-# userI.first_name = 'Hari Kiran'
-# userI.last_name = 'Vege'
-# userI.email = '4projtest@gmail.com'
-# userI.save()
-
-# userI = User.objects.get(username='hari.vege')
-# userI.set_password('AKIRAaccount@21')
-# userI.save()
-
-# group_name = 'Associate Professor'
 # my_group = Group.objects.get(name='%s' % str(group_name))
-# user = User.objects.get(username='4akhi') 
 # my_group.user_set.remove(user)
 # print("Success")
-
-# user = User.objects.get(id=2) 
-# check = ', '.join(map(str, user.groups.all()))
-# print(check)
-
-# get_user = User.objects.get(username = 'KavithaDesigar')
-# print(get_user.delete())
-# staff = Staff.objects.get(user=get_user)
-# staff.name_prefix = 'Dr'
-# staff.save()
