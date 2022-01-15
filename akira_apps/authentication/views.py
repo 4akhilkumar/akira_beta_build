@@ -930,11 +930,17 @@ def validateSwitchDevice(request):
 
     if request.method == "POST":
         if currentSDReq.user == request.user:
-            getLastPage = UserPageVisits.objects.filter(user = request.user).order_by('-created_at')[0]
+            try:
+                getLastPage = UserPageVisits.objects.filter(user = request.user).order_by('-created_at')[0]
+                pageURL = getLastPage.currentPage
+            except Exception:
+                getLastPage = None
+                current_site = get_current_site(request)
+                pageURL = "http://"+str(current_site.domain)+"/"
             update_currentSDReq = currentSDReq
             update_currentSDReq.userConfirm = "User Approved"
             update_currentSDReq.reason = "User Confirmed the Switch Device"
-            update_currentSDReq.currentPage = getLastPage.currentPage
+            update_currentSDReq.currentPage = pageURL
             update_currentSDReq.status = "Switch Device Pending"
             update_currentSDReq.save()
             user = User.objects.get(username = request.user.username)
