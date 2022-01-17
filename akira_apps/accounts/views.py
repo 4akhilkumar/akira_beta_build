@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http.response import HttpResponse
 from django.shortcuts import redirect, render
+from django.db.models import Q
 
 import re
 import secrets
@@ -71,9 +72,9 @@ def account_settings(request):
         attempt_on_that_date = UserLoginDetails.objects.filter(user__username = request.user.username, attempt = 'Failed', created_at__range=(start_date,end_date)).count()
         failed_attempts_date.append(attempt_on_that_date)
 
-    get_failed_login_attempts = UserLoginDetails.objects.filter(user__username = request.user.username, attempt = "Failed", score__lte = 15).order_by('-created_at')
+    get_unconfirmed_login_attempts = UserLoginDetails.objects.filter(Q(user__username = request.user.username, attempt = "Not Confirmed Yet!") | Q(user__username = request.user.username, attempt = "Need to verify")).order_by('-created_at')
+    
     get_failed_attempt_in_a_month = UserLoginDetails.objects.filter(user = request.user, attempt = "Failed", user_confirm = 'Pending', score__lte = 15, created_at__range=(start_month,end_month)).count()
-    get_failed_login_attempts_count = UserLoginDetails.objects.filter(user__username = request.user.username, attempt = "Failed", score__lte = 15).count()
     get_currentLoginInfo = UserLoginDetails.objects.filter(user__username = request.user.username, attempt="Success").order_by('-created_at')[0]
     
     user_agent = request.META['HTTP_USER_AGENT']
@@ -109,9 +110,8 @@ def account_settings(request):
         "get_dates":remove_duplicate_date_after_ordinal,
         "success_attempts_date":success_attempts_date,
         "failed_attempts_date":failed_attempts_date,
-        "get_failed_login_attempts":get_failed_login_attempts,
+        "get_unconfirmed_login_attempts":get_unconfirmed_login_attempts,
         "get_failed_attempt_in_a_month":get_failed_attempt_in_a_month,
-        "get_failed_login_attempts_count":get_failed_login_attempts_count,
         "get_currentLoginInfo":get_currentLoginInfo,
         "get_PreviousLoginInfo":get_PreviousLoginInfo,
         "thisDeviceCurrent":thisDeviceCurrent,
@@ -171,7 +171,6 @@ def delete_existing_backup_codes(request):
         backup_codes = None
     if backup_codes == None:
         messages.info(request, "No Backup codes to delete")
-        return redirect('account_settings')
     else:
         backup_codes = User_BackUp_Codes.objects.get(user=request.user)
         backup_codes.delete()
@@ -185,19 +184,18 @@ def status_2fa(request):
     except TwoFactorAuth.DoesNotExist:
         check_current_user_2fa = None
     if check_current_user_2fa == None:
-        create_enable_2fa = TwoFactorAuth.objects.create(user=request.user, twofa = 1)
-        create_enable_2fa.save()
+        TwoFactorAuth.objects.create(user=request.user, twofa = True)
         messages.info(request, "2-Factor Authentication is enabled")
     else:
         check_current_user_2fa_status = TwoFactorAuth.objects.get(user=request.user)
         if check_current_user_2fa_status.twofa == False:
             update_enable_2fa = TwoFactorAuth.objects.get(id = check_current_user_2fa_status.id)
-            update_enable_2fa.twofa = 1
+            update_enable_2fa.twofa = True
             update_enable_2fa.save()
             messages.info(request, "2-Factor Authentication is enabled")
         else:
             update_disable_2fa = TwoFactorAuth.objects.get(id = check_current_user_2fa_status.id)
-            update_disable_2fa.twofa = 0
+            update_disable_2fa.twofa = False
             update_disable_2fa.save()
             messages.info(request, "2-Factor Authentication is disabled")
             return redirect('delete_existing_backup_codes')
@@ -207,7 +205,8 @@ def status_2fa(request):
 def agree_login_attempt(request, login_attempt_id):
     update_login_confirm = UserLoginDetails.objects.get(id=login_attempt_id)
     if request.user == update_login_confirm.user:
-        update_login_confirm.user_confirm = "YES"
+        update_login_confirm.user_confirm = "Login Confirmed"
+        update_login_confirm.reason = "Login attempt confirmed via user manually"
         update_login_confirm.save()
         messages.success(request, "Login Activity Confirmed!")
         return redirect('account_settings')
@@ -220,11 +219,12 @@ def deny_login_attempt(request, login_attempt_id):
     update_login_confirm = UserLoginDetails.objects.get(id=login_attempt_id)
     spam_ip_address = update_login_confirm.user_ip_address
     if request.user == update_login_confirm.user:
-        update_login_confirm.user_confirm = "NO"
+        update_login_confirm.user_confirm = "User Denied"
+        update_login_confirm.reason = "Login attempt confirmed via user manually"
         update_login_confirm.save()
         messages.success(request, "Login Activity Confirmed!")
-        suspicious_ip = User_IP_S_List(suspicious_list=spam_ip_address)
-        suspicious_ip.save()
+        if User_IP_S_List.objects.filter(suspicious_list=spam_ip_address).count() > 5:
+            User_IP_S_List.objects.create(suspicious_list=spam_ip_address)
         return redirect('account_settings')
     else:
         messages.warning(request, "Access Denied!")
