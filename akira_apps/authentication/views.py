@@ -75,35 +75,30 @@ def user_login(request):
         except User.DoesNotExist:
             checkUserExists = None
 
-        user = User.objects.get(username = username)
-
-        try:
-            checkSD = SwitchDevice.objects.get(user = user, status = "Switch Device Successful")
-        except SwitchDevice.DoesNotExist:
-            checkSD = None
-        
-        if checkSD:
-            updatecheckSD = SwitchDevice.objects.filter(user = user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful")[0]
-            updatecheckSD.reason = "User Logged In"
-            updatecheckSD.status = "Terminated"
-            updatecheckSD.save()
-
-        try:
-            checkSDPNA = SwitchDevice.objects.get(user = user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
-        except SwitchDevice.DoesNotExist:
-            checkSDPNA = None
-
-        if checkSDPNA:
-            updatecheckSDPNA = SwitchDevice.objects.get(user = user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
-            updatecheckSDPNA.userConfirm = "User Denied"
-            updatecheckSDPNA.reason = "User Logged In"
-            updatecheckSDPNA.status = "Terminated"
-            updatecheckSDPNA.save()
-
         if cap_json['success'] == True:
             if data['checkKeyEncrypted'] is True:
                 if User_IP_S_List.objects.filter(suspicious_list = user_ip_address).exists() is False:
                     if checkUserExists:
+                        user = User.objects.get(username = username)
+                        try:
+                            checkSD = SwitchDevice.objects.get(user = user, status = "Switch Device Successful")
+                        except SwitchDevice.DoesNotExist:
+                            checkSD = None
+                        if checkSD:
+                            updatecheckSD = SwitchDevice.objects.filter(user = user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful")[0]
+                            updatecheckSD.reason = "User Logged In"
+                            updatecheckSD.status = "Terminated"
+                            updatecheckSD.save()
+                        try:
+                            checkSDPNA = SwitchDevice.objects.get(user = user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
+                        except SwitchDevice.DoesNotExist:
+                            checkSDPNA = None
+                        if checkSDPNA:
+                            updatecheckSDPNA = SwitchDevice.objects.get(user = user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending")
+                            updatecheckSDPNA.userConfirm = "User Denied"
+                            updatecheckSDPNA.reason = "User Logged In"
+                            updatecheckSDPNA.status = "Terminated"
+                            updatecheckSDPNA.save()
                         if user.is_active == True:
                             user = authenticate(request, username = username, password = data['MetaKey'])
                             if user is not None:
@@ -113,7 +108,7 @@ def user_login(request):
                                 else:
                                     dataset_UserLoginDetails = UserLoginDetails.objects.filter(user__username = username).count()
                                     if dataset_UserLoginDetails > 2:
-                                        current_uld = UserLoginDetails.objects.filter(user__username = username)
+                                        current_uld = UserLoginDetails.objects.filter(user__username = username, attempt = "Success")
                                         last_current_uld = UserLoginDetails.objects.filter(user__username = username).order_by('-created_at')
                                         current_user = User.objects.get(username = username)
                                         list_current_uld_ipa = []
@@ -142,6 +137,7 @@ def user_login(request):
                                             update_attempt_ncy.score = count
                                             update_attempt_ncy.attempt = "Success"
                                             update_attempt_ncy.reason = str(count)
+                                            update_attempt_ncy.sessionKey = request.session.session_key
                                             update_attempt_ncy.save()
                                             return redirect('login')
                                         elif (count >= 4 and count <= 20):
@@ -188,12 +184,13 @@ def user_login(request):
                                             update_attempt_ncy.save()
                                             return redirect('verify_its_you', username = dataUsername['EncryptedUsername'])
                                     elif dataset_UserLoginDetails < 3:
+                                        login(request, user)
                                         current_userlogindetailsObject = UserLoginDetails.objects.filter(user__username = username, attempt = "Not Confirmed Yet!").order_by('-created_at')[0]
                                         get_current_userlogindetailsObject_Id = UserLoginDetails.objects.get(id = current_userlogindetailsObject.id)
                                         get_current_userlogindetailsObject_Id.attempt = "Success"
+                                        get_current_userlogindetailsObject_Id.sessionKey = request.session.session_key
                                         get_current_userlogindetailsObject_Id.save()
                                         
-                                        login(request, user)
                                         group = None
                                         if request.user.groups.exists():
                                             group = request.user.groups.all()[0].name
@@ -288,6 +285,32 @@ def save_login_details(request, user_name, user_ip_address, attempt, reason):
             UserLoginDetails.objects.create(user_ip_address = user_ip_address, user = userObj, os_details = OS_Details, browser_details = browser, attempt = attempt, reason = reason)
         except Exception as e:
             return e
+
+def getLoginScore(LoginObjectID, username):
+    current_uld = UserLoginDetails.objects.filter(user__username = username, attempt = "Success")
+    last_current_uld = UserLoginDetails.objects.get(id = LoginObjectID)
+    list_current_uld_ipa = []
+    list_current_uld_osd = []
+    list_current_uld_bd = []
+    for i in range(len(current_uld)-1):
+        list_current_uld_ipa.append(current_uld[i].user_ip_address)
+        list_current_uld_osd.append(current_uld[i].os_details)
+        list_current_uld_bd.append(current_uld[i].browser_details)
+
+    user_ip_address = str(last_current_uld.user_ip_address)
+    os_details = str(last_current_uld.os_details)
+    browser_details = str(last_current_uld.browser_details)
+
+    count = 0
+    if user_ip_address in list_current_uld_ipa:
+        count += 16
+    if os_details in list_current_uld_osd:
+        count += 4
+    if browser_details in list_current_uld_bd:
+        count += 2
+    return count
+
+# UserLoginDetails.objects.all().delete()
 
 def verify_its_you(request, username):
     try:
@@ -389,6 +412,12 @@ def confirmEmailStatus(request, username):
         user = User.objects.get(username = dataUsername['DecryptedUsername'])
         messages.success(request, "Login Successful")
         login(request, user)
+        getUserLoginDetailsObj = UserLoginDetails.objects.get(user_ip_address = ip, 
+                                        user__username = dataUsername['DecryptedUsername'],
+                                        attempt = "Success", 
+                                        reason = "Verified via Confirm Link via Email")
+        getUserLoginDetailsObj.sessionKey = request.session.session_key
+        getUserLoginDetailsObj.save()
         data = {
             'status': 'success',
         }
@@ -439,32 +468,28 @@ def verify_user_by_backup_codes(request, username):
                     userbackupcodes.save()
                     user.is_active = True
                     user.save()
+                    login(request, user)
                     get_LoginAttempt = UserLoginDetails.objects.filter(user=user, attempt="Need to verify").order_by('-created_at')[0]
                     update_LoginAttempt = UserLoginDetails.objects.get(id=get_LoginAttempt.id)
+                    update_LoginAttempt.score = getLoginScore(update_LoginAttempt.id, dataUsername['DecryptedUsername'])
                     update_LoginAttempt.attempt = "Success"
+                    update_LoginAttempt.user_confirm = "User used 2FA Backup Codes"
                     update_LoginAttempt.reason = "Confirmed User via Backup Codes"
+                    update_LoginAttempt.sessionKey = request.session.session_key
                     update_LoginAttempt.save()
-                    try:
-                        User_BackUp_Codes_Login_Attempts.objects.filter(user = user, status = "Failed").delete()
-                    except Exception:
-                        pass
-                    try:
-                        backup_codes = User_BackUp_Codes.objects.get(user = user)
-                    except User_BackUp_Codes.DoesNotExist:
-                        backup_codes = None
-                    if backup_codes == None:
-                        pass
-                    else:
-                        checkBackupCodesLength = len(backup_codes.backup_codes)
-                        if checkBackupCodesLength == 0:
-                            return redirect('delete_existing_backup_codes')
-                    login(request, user)
+                    checkBackupCodesLength = len(userbackupcodes.backup_codes)
+                    if checkBackupCodesLength == 0:
+                        return redirect('delete_existing_backup_codes')
                     messages.success(request, "Login Successful")
                     return redirect('login')
                 else:
                     messages.info(request, "Invalid Backup Code")
                     User_BackUp_Codes_Login_Attempts.objects.create(user = user, userIPAddr = ip, status = "Failed")
-                    backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(user = user, userIPAddr = ip, status = "Failed").count()
+                    twenty_four_hrs = pydt.datetime.now() - pydt.timedelta(days=1)
+                    backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(
+                                                            user = user, userIPAddr = ip, 
+                                                            status = "Failed", 
+                                                            created_at__gte=twenty_four_hrs).count()
                     if backup_code_attempt_status_count > 4:
                         User_IP_S_List.objects.update_or_create(suspicious_list = ip)
                         messages.info("Please confirm it's you to login")
@@ -670,22 +695,28 @@ def twofa_verify_user_by_backup_codes(request, username):
                 userbackupcodes.save()
                 user.is_active = True
                 user.save()
+                login(request, user)
                 get_LoginAttempt = UserLoginDetails.objects.filter(user=user, attempt="Not Confirmed Yet!").order_by('-created_at')[0]
                 update_LoginAttempt = UserLoginDetails.objects.get(id=get_LoginAttempt.id)
+                update_LoginAttempt.score = getLoginScore(update_LoginAttempt.id, dataUsername['DecryptedUsername'])
                 update_LoginAttempt.attempt = "Success"
+                update_LoginAttempt.user_confirm = "User used 2FA Backup Codes"
                 update_LoginAttempt.reason = "Confirmed User via 2FA Backup Codes"
+                update_LoginAttempt.sessionKey = request.session.session_key
                 update_LoginAttempt.save()
-                try:
-                    User_BackUp_Codes_Login_Attempts.objects.filter(user = user, status = "Failed").delete()
-                except Exception:
-                    pass
-                login(request, user)
+                checkBackupCodesLength = len(userbackupcodes.backup_codes)
+                if checkBackupCodesLength == 0:
+                    return redirect('delete_existing_backup_codes')
                 messages.success(request, "Login Successful")
                 return redirect('login')
             else:
                 messages.info(request, "Invalid Backup Code")
                 User_BackUp_Codes_Login_Attempts.objects.create(user = user, userIPAddr = ip, status = "Failed")
-                backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(user = user, userIPAddr = ip, status = "Failed").count()
+                twenty_four_hrs = pydt.datetime.now() - pydt.timedelta(days=1)
+                backup_code_attempt_status_count = User_BackUp_Codes_Login_Attempts.objects.filter(
+                                                        user = user, userIPAddr = ip, 
+                                                        status = "Failed", 
+                                                        created_at__gte=twenty_four_hrs).count()
                 if backup_code_attempt_status_count > 4:
                     User_IP_S_List.objects.update_or_create(suspicious_list = ip)
                     messages.info("Please confirm it's you to login")
@@ -793,6 +824,8 @@ def checkUserResponse(request, username):
     if (userLoginDetails) and (userLoginDetails.user_ip_address == ip):
         user = User.objects.get(username = dataUsername['DecryptedUsername'])
         login(request, user)
+        userLoginDetails.sessionKey = request.session.session_key
+        userLoginDetails.save()
         data = {
             'status': 'success',
         }
