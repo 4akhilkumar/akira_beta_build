@@ -1,10 +1,15 @@
 from django.shortcuts import redirect, render
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http.response import HttpResponse, JsonResponse
+
+import pandas as pd
+import io
+import csv
+import datetime as pydt
 
 from akira_apps.super_admin.decorators import allowed_users
-from .models import (Semester, Block, Floor, Room)
-from akira_apps.academic.forms import (RoomTypeForm, SemesterModeForm)
+from .models import (Block, Floor, Room)
+from akira_apps.academic.forms import (RoomTypeForm)
 
 def returnBlockName(blockName):
     if not "block" in blockName:
@@ -36,12 +41,12 @@ def returnBlockName(blockName):
         blockName = blockName.replace("block", " Block")
     return blockName
 
-@allowed_users(allowed_roles=['Administrator'])
+@allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
 def create_block_save(request):
     if request.method == 'POST':
         blockName = request.POST.get('block_name')
         if "block" == blockName.lower() or blockName == None or blockName == "":
-            messages.info(request, 'What BLock is it?')
+            messages.info(request, 'What Block is it?')
             return redirect('manage_academic')
         getblockName = returnBlockName(blockName)
         blockDesc = request.POST.get('block_desc')
@@ -50,10 +55,12 @@ def create_block_save(request):
         except Exception as e:
             if "UNIQUE constraint" in str(e):
                 messages.info(request, 'Block Name Already Exists!')
-                return redirect('manage_academic')
+            else:
+                messages.info(request, e)
+            return redirect('manage_academic')
         return redirect('manage_academic')
 
-@allowed_users(allowed_roles=['Administrator'])
+@allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
 def delete_block(request, block_id):
     block = Block.objects.get(id = block_id)
     block.delete()
@@ -83,7 +90,7 @@ def returnFloorName(floorName):
                 break
     return floorName
 
-@allowed_users(allowed_roles=['Administrator'])
+@allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
 def create_floor_save(request):
     if request.method == 'POST':
         floorName = request.POST.get('floor_name')
@@ -95,16 +102,17 @@ def create_floor_save(request):
         except Exception as e:
             if "UNIQUE constraint" in str(e):
                 messages.info(request, '{} Already Exists in {}!'.format(floorName, fetechBlock.block_name))
-                return redirect('manage_academic')
+            else:
+                messages.info(request, e)
+            return redirect('manage_academic')
         return redirect('manage_academic')
 
-@allowed_users(allowed_roles=['Administrator'])
+@allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
 def delete_floor(request, floor_id):
     floor = Floor.objects.get(id = floor_id)
     floor.delete()
     return redirect('manage_academic')
 
-@allowed_users(allowed_roles=['Administrator'])
 def getFloorbyBlock(request):
     if request.method == "POST":
         block_id = request.POST['block']
@@ -116,7 +124,7 @@ def getFloorbyBlock(request):
             print(e)
         return JsonResponse(list(getFloors.values('id', 'floor_name')), safe = False) 
 
-@allowed_users(allowed_roles=['Administrator'])
+@allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
 def create_room_save(request):
     if request.method == 'POST':
         roomName = request.POST.get('room_name')
@@ -133,65 +141,51 @@ def create_room_save(request):
                                 type=roomType,
                                 capacity=roomCapacity)
         except Exception as e:
-            print(e)
+            messages.info(request, e)
         return redirect('manage_academic')
 
-@allowed_users(allowed_roles=['Administrator'])
+@allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
 def delete_room(request, room_id):
     room = Room.objects.get(id = room_id)
     room.delete()
     return redirect('manage_academic')
 
-@allowed_users(allowed_roles=['Administrator'])
-def create_semester_save(request):
+@allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
+def bulk_upload_academic_info_save(request):
     if request.method == 'POST':
-        semesterMode = request.POST.get('semester_mode')
-        semesterStartYear = request.POST.get('semester_start_year')
-        semesterEndYear = request.POST.get('semester_end_year')
-        semesterisActive = request.POST.get('semester_is_active')
-        if semesterisActive == 'on':
-            semesterisActive = True
-        else:
-            semesterisActive = False
-        createSemester = Semester.objects.create(mode=semesterMode,
-                                                start_year=semesterStartYear,
-                                                end_year=semesterEndYear,
-                                                is_active=semesterisActive)
-        createSemester.save()
+        paramFile = io.TextIOWrapper(request.FILES['academic_file'].file)
+        data = pd.read_csv(paramFile)
+
+        for index, row in data.iterrows():
+            if Block.objects.filter(block_name = str(row['Block Name'])).exists() is False:
+                blockObj = Block.objects.create(
+                    block_name = row['Block Name'],
+                    block_desc = row['Block Desc'],
+                )
+            else:
+                blockObj = Block.objects.filter(block_name = str(row['Block Name']))[0]
+            
+            if Floor.objects.filter(floor_name = str(row['Floor']), block__block_name = str(row['Block Name'])).exists() is False:
+                floorObj = Floor.objects.create(
+                    floor_name = row['Floor'],
+                    block = blockObj,
+                )
+            else:
+                floorObj = Floor.objects.filter(floor_name = str(row['Floor']))[0]
+            
+            if Room.objects.filter(block__block_name = str(row['Block Name']), floor__floor_name = str(row['Floor']), room_name = str(row['Room'])).exists() is False:
+                Room.objects.create(
+                    room_name = row['Room'],
+                    block = blockObj,
+                    floor = floorObj,
+                    type = row['Room Type'],
+                    capacity = row['Room Capacity'],
+                )
+            messages.success(request, "Bulk Import done")
         return redirect('manage_academic')
 
-@allowed_users(allowed_roles=['Administrator'])
-def fetch_semester(request, semester_id):
-    semester = Semester.objects.get(id=semester_id)
-    context = {
-        'semester': semester
-    }
-    return render(request, 'academic/semester/edit_semester.html', context)
-
-@allowed_users(allowed_roles=['Administrator'])
-def update_semester_save(request, semester_id):
-    if request.method == 'POST':
-        semesterMode = request.POST.get('semester_mode')
-        semesterStartYear = request.POST.get('semester_start_year')
-        semesterEndYear = request.POST.get('semester_end_year')
-        semesterisActive = request.POST.get('semester_is_active')
-        if semesterisActive == 'on':
-            semesterisActive = True
-        else:
-            semesterisActive = False
-        updateSemester = Semester.objects.get(id = semester_id)
-        updateSemester.mode=semesterMode
-        updateSemester.start_year=semesterStartYear
-        updateSemester.end_year=semesterEndYear
-        updateSemester.is_active=semesterisActive
-        updateSemester.save()
-        return redirect('manage_academic')
-
-@allowed_users(allowed_roles=['Administrator'])
-def delete_semester(request, semester_id):
-    semester = Semester.objects.get(id = semester_id)
-    semester.delete()
-    return redirect('manage_academic')
+# Testing MTM
+from .models import (Testing)
 
 @allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
 def manage_academic(request):
@@ -199,19 +193,44 @@ def manage_academic(request):
     floors = Floor.objects.all()
     rooms = Room.objects.all()
     roomTypeForm = RoomTypeForm()
-    semesters = Semester.objects.all()
-    semesterModeForm = SemesterModeForm()
-    getActiveSemester = Semester.objects.filter(is_active=True)
-    activeSemesterMode = "--"
-    if getActiveSemester:
-        activeSemesterMode = getActiveSemester[0].mode
+    # Testing MTM
+    test = Testing.objects.all()
     context = {
         "blocks": blocks,
         "floors": floors,
         "rooms": rooms,
         "roomTypeForm":roomTypeForm,
-        "semesters":semesters,
-        "semesterModeForm":semesterModeForm,
-        "activeSemesterMode":activeSemesterMode,
+        "test":test,
     }
     return render(request, 'academic/academic.html', context)
+
+@allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
+def academic_info_csv(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename=academic_info_record' + \
+        str(pydt.datetime.now()) + '.csv'
+
+    writer = csv.writer(response)
+    writer.writerow(['Block Name', 'Block Desc', 'Floor', 'Room', 
+                    'Room Type', 'Room Capacity'])
+
+    rooms = Room.objects.all()
+
+    for i in rooms:
+        writer.writerow([i.block.block_name, i.block.block_desc, i.floor.floor_name,
+                        i.room_name, i.type, i.capacity])
+    return response
+
+# Testing Many-to-Many
+
+# Testing.objects.all().delete()
+
+def TestingMet(request):
+    if request.method == "POST":
+        getName = request.POST['name']
+        getMembers = request.POST.getlist('members')
+        createObj = Testing.objects.create(name = getName)
+        for i in getMembers:
+            ithObj = Block.objects.get(id=i)
+            createObj.members.add(ithObj)
+    return redirect('manage_academic')
