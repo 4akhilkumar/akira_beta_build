@@ -788,7 +788,7 @@ def requestSwitchDevice(request):
     OS_Details = res[0][1:-1]
 
     if User_IP_S_List.objects.filter(suspicious_list = ip).exists() is True:
-        messages.warning("We can't process your Switch Device request")
+        messages.warning(request, "We can't process your Switch Device request")
         return redirect('login')
     else:
         if request.method == 'POST':
@@ -886,7 +886,13 @@ def validateSwitchDevice(request):
                 currentSDReq = SwitchDevice.objects.get(user = request.user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful")
             except SwitchDevice.DoesNotExist:
                 currentSDReq = None
-
+    try:
+        if request.session.session_key == currentSDReq.sessionKey:
+            terminate_access = "Denied"
+        else:
+            terminate_access = "Allowed"
+    except Exception:
+        terminate_access = "NA"
     if request.method == "POST":
         if currentSDReq.user == request.user:
             try:
@@ -895,7 +901,7 @@ def validateSwitchDevice(request):
             except Exception:
                 getLastPage = None
                 current_site = get_current_site(request)
-                pageURL = "https://"+str(current_site.domain)+"/"
+                pageURL = "http://"+str(current_site.domain)+"/"
             update_currentSDReq = currentSDReq
             update_currentSDReq.userConfirm = "User Approved"
             update_currentSDReq.reason = "User Confirmed the Switch Device"
@@ -913,6 +919,7 @@ def validateSwitchDevice(request):
     context = {
         "currentSDReq": currentSDReq,
         "getSwitchDeviceRequests": getSwitchDeviceRequests,
+        "terminate_access":terminate_access,
     }
     return render(request, 'authentication/SwitchDevice/acceptSwitchDevice.html', context)
 
@@ -929,15 +936,17 @@ def denySwitchDevice(request, switchDeviceReqID):
 @login_required(login_url=settings.LOGIN_URL)
 def terminateSwitchDevice(request, switchDeviceReqID):
     update_currentSDReq = SwitchDevice.objects.get(id = switchDeviceReqID, user__username = request.user.username)
-    session_key = update_currentSDReq.sessionKey
-    try:
-        session = Session.objects.get(session_key=session_key)
-        session.delete()
-    except Exception:
-        messages.info(request, "Session is already terminated")
-    update_currentSDReq.status = "Terminated"
-    update_currentSDReq.save()
-    messages.info(request, "Your Terminate Request is been taken successfully")
+    if request.session.session_key == update_currentSDReq.sessionKey:
+        messages.info(request, "You don't have access to terminate the session")
+    else:
+        try:
+            session = Session.objects.get(session_key=update_currentSDReq.sessionKey)
+            session.delete()
+        except Exception:
+            messages.info(request, "Session is already terminated")
+        update_currentSDReq.status = "Terminated"
+        update_currentSDReq.save()
+        messages.info(request, "Your Terminate Request is been taken successfully")
     return redirect('validateSwitchDevice')
 
 def checkValidatedSwitchDeviceRequest(request, username, switchDeviceID):
@@ -1118,50 +1127,3 @@ def logoutUser(request):
         return redirect('login')
     else:
         return redirect('login')
-
-# from django.contrib.sessions.models import Session
-# for s in Session.objects.all():
-#     user = User.objects.get(username = '4akhi')
-#     if s.get_decoded().get('_auth_user_id') == str(user.id):
-        # print(s)
-        # s.delete()
-        # print("\tSession was deleted")
-
-# import datetime
-# from django.conf import settings
-# from django.contrib.auth import logout
-# from django.contrib.auth.models import User
-# from django.contrib.sessions.models import Session
-# from django.http import HttpRequest
-# from importlib import import_module
-
-# def init_session(session_key):
-#     """
-#     Initialize same session as done for ``SessionMiddleware``.
-#     """
-#     engine = import_module(settings.SESSION_ENGINE)
-#     return engine.SessionStore(session_key)
-
-# now = datetime.datetime.now()
-# request = HttpRequest()
-
-# sessions = Session.objects.filter(expire_date__gt=now)
-
-# for session in sessions:
-#     user_id = session.get_decoded().get('_auth_user_id')
-#     print(session.session_key)
-#     request.session = init_session(session.session_key)
-
-#     # logout(request)
-#     print('Successfully logout %r user.' % user_id) # 2qgdps6v10mag22nfnbji6n1rfrycxmf 2022-01-17 18:58:05.037466
-
-# from django.contrib.sessions.models import Session
-# from django.contrib.auth.models import User
-
-# session_key = '2qgdps6v10mag22nfnbji6n1rfrycxmf'
-
-# session = Session.objects.get(session_key=session_key)
-# session_data = session.get_decoded()
-# print(session_data)
-# uid = session_data.get('_auth_user_id')
-# user = User.objects.get(id=uid)
