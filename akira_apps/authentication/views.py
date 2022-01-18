@@ -895,7 +895,7 @@ def validateSwitchDevice(request):
             except Exception:
                 getLastPage = None
                 current_site = get_current_site(request)
-                pageURL = "http://"+str(current_site.domain)+"/"
+                pageURL = "https://"+str(current_site.domain)+"/"
             update_currentSDReq = currentSDReq
             update_currentSDReq.userConfirm = "User Approved"
             update_currentSDReq.reason = "User Confirmed the Switch Device"
