@@ -955,7 +955,6 @@ def checkValidatedSwitchDeviceRequest(request, username, switchDeviceID):
         currentSDObj = SwitchDevice.objects.get(id=switchDeviceID)
     except SwitchDevice.DoesNotExist:
         currentSDObj = None
-        messages.error(request, "Switch Device request is expired")
 
     getCurrentSDReqOvertimeObj = False
     try:
@@ -966,7 +965,6 @@ def checkValidatedSwitchDeviceRequest(request, username, switchDeviceID):
     if (getCurrentSDReqOvertime) and (pydt.datetime.now() >= eleven_minutes):
         getCurrentSDReqOvertime.delete()
         getCurrentSDReqOvertimeObj = True
-        messages.error(request, "Switch Device request is expired")
 
     try:
         url = 'https://akira-rest-api.herokuapp.com/getDecryptionData/{}/?format=json'.format(username)
@@ -986,7 +984,6 @@ def checkValidatedSwitchDeviceRequest(request, username, switchDeviceID):
                         id = switchDeviceID,
                         user__username=dataUsername['DecryptedUsername'],
                         status = "Terminated")
-        messages.error(request, "Switch Device request is expired")
     except SwitchDevice.DoesNotExist:
         GetSwitchDeviceRequestObjectUD = None
 
@@ -1011,18 +1008,21 @@ def checkValidatedSwitchDeviceRequest(request, username, switchDeviceID):
             'redirect_url': currentUrl,
         }
     elif (GetSwitchDeviceRequestObjectUD) and (GetSwitchDeviceRequestObjectUD.userIPAddr == ip):
-        logout(request)
         data = {
             'status': 'failed',
             'message': 'User Denied',
         }
-    elif getCurrentSDReqOvertimeObj is True or currentSDObj is None:
+    elif currentSDObj is None:
+        data = {
+            'status': 'failed',
+            'message': 'Object does not exist',
+        }
+    elif getCurrentSDReqOvertimeObj is True:
         data = {
             'status': 'failed',
             'message': 'Request Expired',
         }
     else:
-        logout(request)
         data = {
             'status': 'failed',
         }
