@@ -30,6 +30,20 @@ def manage_courses(request):
     }
     return render(request, 'course/manage_courses.html', context)
 
+def first_letter_word(value):
+    lst = value.split(" ")
+    chindex=1
+    arr = []
+    if "and" in lst:
+        lst.remove("and")
+    for letter in lst:
+        if chindex==1:
+            arr.append(letter[0].upper().strip("&"))
+        else:
+            arr.append(letter)
+    out = "".join(arr)
+    return out
+
 @allowed_users(allowed_roles=['Administrator', 'Head of the Department'])
 def create_course_save(request):
     if request.method == 'POST':
@@ -46,11 +60,17 @@ def create_course_save(request):
         courseSpecialization_id = request.POST.get('specialization')
         courseSpecializationObj = SpecializationsMC.objects.get(id=courseSpecialization_id)
         courseSemester = Semester.objects.get(id=courseSemester)
+        # courseType = request.POST.get('type')
+        # courseCredits = request.POST.get('credits')
+        # courseLTPS = request.POST.get('ltps')
+        # coursepre_requisite = request.POST.get('pre_requisite')
+        # coursepre_requisiteObj = CourseMC.objects.get(course_name = coursepre_requisite)
         courseFiles = request.FILES.getlist('course_files')
         try:
             CourseMC.objects.create(
                 course_code=courseCode,
                 course_name=courseName,
+                course_short_name=first_letter_word(courseName),
                 course_short_info=courseShortInfo,
                 course_wywl=courseWYWL,
                 course_sywg=courseSYWG,
@@ -58,7 +78,12 @@ def create_course_save(request):
                 course_coordinator=courseCC,
                 branch=courseBranch,
                 semester=courseSemester,
-                specialization=courseSpecializationObj)
+                specialization=courseSpecializationObj,
+                # type=courseType,
+                # credits=courseCredits,
+                # ltps=courseLTPS,
+                # pre_requisite=coursepre_requisiteObj
+                )
             getCourseObj = CourseMC.objects.get(course_code = courseCode)
             try:
                 for file in courseFiles:

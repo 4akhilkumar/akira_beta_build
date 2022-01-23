@@ -59,7 +59,7 @@ def create_specialization_save(request):
                 specialization_wywl=specializationWYWL,
                 specialization_sywg=specializationSYWG,
                 specialization_desc=specializationDesc,
-                specialization_faculty=specializationCC,
+                # specialization_faculty=specializationCC,
                 branch=specializationBranch,
                 capacity=specializationCapacity)
             getSpecializationObj = SpecializationsMC.objects.get(specialization_name = specializationName)
