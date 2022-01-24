@@ -110,7 +110,7 @@ def user_login(request):
                                 return redirect('twofa_verify_its_you', username = dataUsername['EncryptedUsername'], userLoginObj = getuserLoginObj.id)
                             else:
                                 dataset_UserLoginDetails = UserLoginDetails.objects.filter(user__username = username).count()
-                                if dataset_UserLoginDetails > 2:
+                                if dataset_UserLoginDetails > 1:
                                     six_days_ago = pydt.datetime.now() - pydt.timedelta(days = 6)
                                     current_uld = UserLoginDetails.objects.filter(user__username = username, attempt = "Success", created_at__gte = six_days_ago)
                                     last_current_uld = UserLoginDetails.objects.filter(id = getuserLoginObj.id, user__username = username).order_by('-created_at')
