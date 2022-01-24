@@ -43,6 +43,10 @@ def user_login(request):
         ep = request.POST.get('password')
         user_ip_address = ip
 
+        if username == "" or ep == "":
+            messages.error(request, 'Please enter your username.')
+            return redirect('login')
+
         try:
             url = 'https://akira-rest-api.herokuapp.com/getEncryptionData/{}/?format=json'.format(username)
             response = requests.get(url)
@@ -173,18 +177,7 @@ def user_login(request):
                                             deleteLoginDetails.delete()
                                             messages.warning(request, "Check your internet connection")
                                             return redirect('login')
-                                    # else:
-                                    #     user = User.objects.get(username = user.username)
-                                    #     user.is_active = False
-                                    #     user.save()
-                                    #     get_attempt_ncy = UserLoginDetails.objects.filter(id = getuserLoginObj.id, user__username = username, attempt = "Not Confirmed Yet!").order_by('-created_at')[0]
-                                    #     update_attempt_ncy = UserLoginDetails.objects.get(id = get_attempt_ncy.id)
-                                    #     update_attempt_ncy.score = count
-                                    #     update_attempt_ncy.attempt = "Need to verify"
-                                    #     update_attempt_ncy.reason = str(count)
-                                    #     update_attempt_ncy.save()
-                                    #     return redirect('verify_its_you', username = dataUsername['EncryptedUsername'], userLoginObj = getuserLoginObj.id)
-                                elif dataset_UserLoginDetails < 3:
+                                else:
                                     login(request, user)
                                     current_userlogindetailsObject = UserLoginDetails.objects.filter(id = getuserLoginObj.id, user__username = username, attempt = "Not Confirmed Yet!").order_by('-created_at')[0]
                                     get_current_userlogindetailsObject_Id = UserLoginDetails.objects.get(id = current_userlogindetailsObject.id)
@@ -230,6 +223,8 @@ def user_login(request):
                                             return redirect(request.GET.get('next'))
                                         else:
                                             return redirect('super_admin_dashboard')
+                                    else:
+                                        return HttpResponse("Contact Administrator")
                         else:
                             messages.warning(request, 'Username or Password is Incorrect!')
                             save_login_details(request, username, user_ip_address, "Failed", "Username or Password is Incorrect!")
@@ -712,16 +707,16 @@ def secure_account(request, username, user_response, userLoginObj):
                 user = User.objects.get(username = dataUsername['DecryptedUsername'])
                 user.is_active = True
                 user.save()
-                return redirect('login')
+                return HttpResponse(status=200)
             else:
                 logout(request)
-                return redirect('login')
+                return HttpResponse(status=400)
         else:
             logout(request)
-            return redirect('login')
+            return HttpResponse(status=400)
     else:
         logout(request)
-        return redirect('login')
+        return HttpResponse(status=400)
 
 def checkUserResponse(request, username, userLoginObj):
     try:
@@ -1120,50 +1115,3 @@ def logoutUser(request):
         return redirect('login')
     else:
         return redirect('login')
-
-# from django.contrib.sessions.models import Session
-# for s in Session.objects.all():
-#     user = User.objects.get(username = '4akhi')
-#     if s.get_decoded().get('_auth_user_id') == str(user.id):
-        # print(s)
-        # s.delete()
-        # print("\tSession was deleted")
-
-# import datetime
-# from django.conf import settings
-# from django.contrib.auth import logout
-# from django.contrib.auth.models import User
-# from django.contrib.sessions.models import Session
-# from django.http import HttpRequest
-# from importlib import import_module
-
-# def init_session(session_key):
-#     """
-#     Initialize same session as done for ``SessionMiddleware``.
-#     """
-#     engine = import_module(settings.SESSION_ENGINE)
-#     return engine.SessionStore(session_key)
-
-# now = datetime.datetime.now()
-# request = HttpRequest()
-
-# sessions = Session.objects.filter(expire_date__gt=now)
-
-# for session in sessions:
-#     user_id = session.get_decoded().get('_auth_user_id')
-#     print(session.session_key)
-#     request.session = init_session(session.session_key)
-
-#     # logout(request)
-#     print('Successfully logout %r user.' % user_id) # 2qgdps6v10mag22nfnbji6n1rfrycxmf 2022-01-17 18:58:05.037466
-
-# from django.contrib.sessions.models import Session
-# from django.contrib.auth.models import User
-
-# session_key = '2qgdps6v10mag22nfnbji6n1rfrycxmf'
-
-# session = Session.objects.get(session_key=session_key)
-# session_data = session.get_decoded()
-# print(session_data)
-# uid = session_data.get('_auth_user_id')
-# user = User.objects.get(id=uid)
