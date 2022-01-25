@@ -43,24 +43,8 @@ def user_login(request):
         ep = request.POST.get('password')
         user_ip_address = ip
 
-        if username == "" or ep == "":
-            messages.error(request, 'Please enter your username.')
-            return redirect('login')
-
-        try:
-            url = 'https://akira-rest-api.herokuapp.com/getEncryptionData/{}/?format=json'.format(username)
-            response = requests.get(url)
-            dataUsername = response.json()
-        except Exception:
-            messages.info(request, "Server under maintenance. Please try again later.")
-            return redirect('login')
-
-        try:
-            getMetaDataUrl = 'https://akira-rest-api.herokuapp.com/getMetaData/{}/{}/?format=json'.format(username, ep)
-            getMetaDataUrlResponse = requests.get(getMetaDataUrl)
-            data = getMetaDataUrlResponse.json()
-        except Exception:
-            messages.info(request, "Server under maintenance. Please try again later.")
+        if (username == "" or ep == "") and (len(username) < 8 or len(ep) < 8):
+            messages.error(request, 'Please enter a valid credentials.')
             return redirect('login')
 
         try:
@@ -75,11 +59,26 @@ def user_login(request):
             return redirect('login')
 
         try:
+            url = 'https://akira-rest-api.herokuapp.com/getEncryptionData/{}/?format=json'.format(username)
+            response = requests.get(url)
+            dataUsername = response.json()
+        except Exception:
+            messages.info(request, "Server under maintenance. Please try again later.")
+            return redirect('login')
+
+        try:
             checkUserExists = User.objects.get(username = username)
         except User.DoesNotExist:
             checkUserExists = None
 
         if cap_json['success'] == True:
+            try:
+                getMetaDataUrl = 'https://akira-rest-api.herokuapp.com/getMetaData/{}/{}/?format=json'.format(username, ep)
+                getMetaDataUrlResponse = requests.get(getMetaDataUrl)
+                data = getMetaDataUrlResponse.json()
+            except Exception:
+                messages.info(request, "Server under maintenance. Please try again later.")
+                return redirect('login')
             if User_IP_S_List.objects.filter(suspicious_list = user_ip_address).exists() is False:
                 if checkUserExists:
                     user = User.objects.get(username = username)
