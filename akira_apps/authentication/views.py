@@ -43,8 +43,8 @@ def user_login(request):
         ep = request.POST.get('password')
         user_ip_address = ip
 
-        if (username == "" or ep == "") and (len(username) < 8 or len(ep) < 8):
-            messages.error(request, 'Please enter a valid credentials.')
+        if (re.match(r'^[a-zA-Z0-9]{8,}$', username) == None or re.match(r'^[a-zA-Z0-9]{8,}$', ep) == None):
+            messages.info(request, 'Please enter a valid credentials.')
             return redirect('login')
 
         try:
