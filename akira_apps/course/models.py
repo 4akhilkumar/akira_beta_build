@@ -27,24 +27,31 @@ class CourseMC(models.Model):
         ("Foreign Language Elective", "Foreign Language Elective"),
         ("Open Elective", "Open Elective"),
         ("Science Elective", "Science Elective"),
+        ("NDY", "NDY"),
     ]
     id = models.UUIDField(primary_key = True, unique = True, default = uuid.uuid4, editable = False)
-    course_code = models.CharField(max_length = 100, unique = True)
-    course_name = models.CharField(max_length = 100, unique = True)
-    course_short_name = models.CharField(max_length = 20)
-    course_short_info = models.TextField(max_length = 500, default="Start your path to a career in project management. No degree or experience is required.")
-    course_wywl = models.TextField(max_length = 500, default="WHAT YOU WILL LEARN")
-    course_sywg = models.TextField(max_length = 500, default="SKILLS YOU WILL GAIN")
-    course_desc = models.TextField(max_length = 500, default="Description of the Course")
+    code = models.CharField(max_length = 100, unique = True)
+    name = models.CharField(max_length = 100, unique = True)
+    short_name = models.CharField(max_length = 20)
+    desc = models.TextField(max_length = 500)
     course_coordinator = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True)
     branch = models.CharField(max_length = 50, choices = BRANCH_CHOICES, default=1)
     semester = models.ForeignKey(Semester, on_delete=models.SET_NULL, blank=True, null=True)
     specialization = models.ForeignKey(SpecializationsMC, on_delete=models.SET_NULL, blank=True, null=True)
-    # type = models.CharField(max_length = 50, choices = COURSE_TYPE, default=1, blank=True, null=True)
-    # pre_requisite = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
+    type = models.CharField(max_length = 50, choices = COURSE_TYPE, default=1, blank=True, null=True)
+    pre_requisite = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
 
     def __str__(self):
-        return '%s - %s' % (self.course_code, self.course_name)
+        return '%s - %s' % (self.code, self.name)
+
+class CourseExtraFields(models.Model):
+    id = models.UUIDField(primary_key = True, unique = True, default = uuid.uuid4, editable = False)
+    course = models.ForeignKey(CourseMC, on_delete=models.CASCADE)
+    field_name = models.CharField(max_length = 100)
+    field_value = models.TextField(max_length = 500)
+
+    def __str__(self):
+        return '%s - %s' % (self.course, self.field_name)
 
 class CourseOfferingType(models.Model):
     id = models.UUIDField(primary_key = True, unique = True, default = uuid.uuid4, editable = False)

@@ -18,6 +18,9 @@ import re
 import httpagentparser
 import json
 import requests
+import string
+import random
+import math
 
 from akira_apps.super_admin.decorators import unauthenticated_user
 from akira_apps.accounts.models import TwoFactorAuth
@@ -29,6 +32,99 @@ from . models import (User_BackUp_Codes, User_BackUp_Codes_Login_Attempts,
 from akira_apps.staff.urls import *
 from akira_apps.super_admin.urls import *
 from akira_apps.academic_registration.urls import *
+
+def TestingArea(request):
+    decipherText = ''
+    plainPassword = ''
+    username = ''
+    if request.method == "POST":
+        username = request.POST.get('username')
+        encryptedText = request.POST.get('deciphertext')
+        plainPassword = request.POST.get('password')
+        
+        encryptedTextLength = len(encryptedText)
+        print(encryptedTextLength)
+
+        ASCII_Username = []
+        for i in username:
+            ASCII_Username.append(ord(i))
+
+        ASCII_Username_Sum = list(map(int, str(sum(ASCII_Username))))
+        print(ASCII_Username_Sum)
+
+        # If ASCII_Username_Sum contains any element zero, then replace those zero with 1
+        for i in range(len(ASCII_Username_Sum)):
+            if ASCII_Username_Sum[i] == 0:
+                ASCII_Username_Sum[i] = 1
+        print(ASCII_Username_Sum)
+
+        # First Largest Number in ASCII_Username_Sum
+        max_ASCII_Username_Sum = max(ASCII_Username_Sum)
+        print("max_ASCII_Username_Sum: ", max_ASCII_Username_Sum)
+
+        # Second Largest Number in ASCII_Username_Sum
+        def findLargest(arr):
+            a=arr
+            a=list(set(a))
+            a.sort()
+            if(len(a)==1 ):
+                return (a[0]+1)
+            else:
+                return (a[-2])
+
+        second_largest = findLargest(ASCII_Username_Sum)
+        print("Second Largest", second_largest)
+
+        # if second_largest is zero or not finite then replace it with max(ASCII_Username_Sum) + 1
+        if second_largest == 0 or math.isinf(second_largest) or second_largest == -math.inf or second_largest == max_ASCII_Username_Sum:
+            second_largest = max_ASCII_Username_Sum + 1
+        print("Second Largest",second_largest)
+
+        # Finding the Password length
+        lengthUsername10 = len(username) * 10
+        password_length = encryptedTextLength / lengthUsername10
+        print("Password Length",password_length)
+
+        passwordLength10 = password_length * 10
+        print("Password Length 10 Times",passwordLength10)
+
+        # Divide the encrypted text into password_length value parts and store it in a list
+        encryptedText_list = []
+        for i in range(int(password_length)):
+            encryptedText_list.append(encryptedText[i*int(lengthUsername10):(i+1)*int(lengthUsername10)])
+        print("Encrypted Text Break Down",encryptedText_list)
+
+        # Find the random digits in the encryptedText_list
+        randomDigits = []
+        # Store the last nth character of each element in the encryptedText_list in randomDigits list
+        for i in range(len(encryptedText_list)):
+            randomDigits.append(encryptedText_list[i][-second_largest])
+        print("Random Digits",randomDigits)
+
+        # get the elements of the encryptedText_list at specific index using randomDigits elements as index values and store it in a list name final_list
+        HexList = []
+        for i in range(len(encryptedText_list)):
+            HexList.append(encryptedText_list[i][int(randomDigits[i])]+encryptedText_list[i][int(randomDigits[i])+1])
+        print(HexList)
+
+        # Convert the HexList elements to ASCII and store it in a final_list
+        final_list = []
+        for i in range(len(HexList)):
+            final_list.append(chr(int(HexList[i], 16)))
+        print(final_list)
+
+        Plain_password = []
+        for i in final_list:
+            value = max_ASCII_Username_Sum + int(max(randomDigits))
+            Plain_password.append(chr(ord(i) - value))
+        print(Plain_password)
+        decipherText = "".join(Plain_password)
+    context = {
+        'decipherText': decipherText,
+        'plainPassword':plainPassword,
+        'username':username,
+    }
+    return render(request, 'TestingArea.html', context)
 
 @unauthenticated_user
 def user_login(request):
@@ -42,9 +138,10 @@ def user_login(request):
         username = request.POST.get('username')
         ep = request.POST.get('password')
         user_ip_address = ip
+        getClientCookie = request.COOKIES['request_token']
 
-        if (username == "" or ep == "") and (len(username) < 8 or len(ep) < 8):
-            messages.error(request, 'Please enter a valid credentials.')
+        if not re.match(r'[a-zA-Z0-9]{8,}$', username) and re.match(r'[a-zA-Z0-9]{8,}$', ep):
+            messages.info(request, 'Please enter a valid credentials.')
             return redirect('login')
 
         try:
@@ -75,7 +172,7 @@ def user_login(request):
             try:
                 getMetaDataUrl = 'https://akira-rest-api.herokuapp.com/getMetaData/{}/{}/?format=json'.format(username, ep)
                 getMetaDataUrlResponse = requests.get(getMetaDataUrl)
-                data = getMetaDataUrlResponse.json()
+                getMetaDataUrlResponsedata = getMetaDataUrlResponse.json()
             except Exception:
                 messages.info(request, "Server under maintenance. Please try again later.")
                 return redirect('login')
@@ -102,7 +199,7 @@ def user_login(request):
                         updatecheckSDPNA.status = "Terminated"
                         updatecheckSDPNA.save()
                     if user.is_active == True:
-                        user = authenticate(request, username = username, password = data['MetaKey'])
+                        user = authenticate(request, username = username, password = getMetaDataUrlResponsedata['MetaKey'])
                         if user is not None:
                             getuserLoginObj = save_login_details(request, username, user_ip_address, "Not Confirmed Yet!", None)
                             if TwoFactorAuth.objects.filter(user__username = username, twofa = True).exists() is True:
@@ -251,7 +348,16 @@ def user_login(request):
     context = {
         "GOOGLE_RECAPTCHA_PUBLIC_KEY": settings.GOOGLE_RECAPTCHA_PUBLIC_KEY,
     }
-    return render(request, 'authentication/login.html', context)
+    loginResponse = render(request, 'authentication/login.html', context)
+    random_number = random.randint(48, 68)
+    ranKey = ''.join(random.choices(string.ascii_letters + string.digits, k=random_number))
+    ranNumberLength = math.ceil((0.18) * len(ranKey))
+    ranNumbers = set(random.choices(string.digits, k=ranNumberLength))
+    
+    cookie_max_age = 300
+    expire_time = pydt.datetime.strftime(pydt.datetime.utcnow() + pydt.timedelta(seconds=cookie_max_age), "%a, %d-%b-%Y %H:%M:%S GMT")
+    loginResponse.set_cookie(key='request_token', value=str(ranKey), max_age=cookie_max_age, expires=expire_time)
+    return loginResponse
 
 def save_login_details(request, user_name, user_ip_address, attempt, reason):
     user_agent = request.META['HTTP_USER_AGENT']
@@ -1069,6 +1175,14 @@ def SyncDevice(request, switchDeviceID):
 def logoutUser(request):
     currentSDUAUCSDSDS = SwitchDevice.objects.filter(user = request.user, userConfirm = "User Approved", reason = "User Confirmed the Switch Device", status = "Switch Device Successful").exists()
     currentSDPNA = SwitchDevice.objects.filter(user = request.user, userConfirm = "Pending", reason = "Not Approved Yet", status = "Switch Device Pending").exists()
+    
+    logoutResponse = render(request, 'authentication/login.html')
+    # ranKey = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+    ranKey = request.user.username
+    cookie_max_age = 604800
+    expire_time = pydt.datetime.strftime(pydt.datetime.utcnow() + pydt.timedelta(seconds=cookie_max_age), "%a, %d-%b-%Y %H:%M:%S GMT")
+    logoutResponse.set_cookie(key='access_token', value=ranKey, max_age=cookie_max_age, expires=expire_time)
+    
     if (request.user.is_authenticated) and (TwoFactorAuth.objects.filter(user = request.user, twofa = False).exists() is True):
         UserPageVisits.objects.filter(user = request.user).delete()
         if currentSDUAUCSDSDS is True:
@@ -1084,7 +1198,7 @@ def logoutUser(request):
             updatecurrentSDPNA.save()
 
         logout(request)
-        return redirect('login')
+        return logoutResponse
     elif (request.user.is_authenticated) and (TwoFactorAuth.objects.filter(user = request.user, twofa = True).exists() is True):
         UserPageVisits.objects.filter(user = request.user).delete()
         if currentSDUAUCSDSDS is True:
@@ -1105,12 +1219,12 @@ def logoutUser(request):
                 return redirect('account_settings')
             else:
                 logout(request)
-                return redirect('login')
+                return logoutResponse
         except User_BackUp_Codes.DoesNotExist:
             messages.info(request, "Please generate Backup codes")
             return redirect('account_settings')
     elif (request.user.is_authenticated):
         logout(request)
-        return redirect('login')
+        return logoutResponse
     else:
-        return redirect('login')
+        return logoutResponse
