@@ -100,6 +100,7 @@ def assign_user_group(request, staff_username):
 #     user = User.objects.get(username = '4akhilkumar')
 # else:
 #     user = User.objects.create_user(username='4akhilkumar')
+# user.username = '4akhilkumar'
 # user.first_name = 'Sai Akhil Kumar Reddy'
 # user.last_name = 'N'
 # user.email = '4akhilkumar@gmail.com'
