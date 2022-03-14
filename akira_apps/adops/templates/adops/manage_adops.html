@@ -1,0 +1,108 @@
+{% extends 'side_panel-navbar_dashboard.html' %}
+{% load static %}
+
+{% block analytics-text %}
+<h1>Manage Adops</h1>
+<p>Manage all the Admission(s) & Opening(s) <span class="fas fa-chart-line"></span> </p>
+{% endblock %}
+
+{% block analytic-overview %}
+<section>
+  <h3 class="section-head">Overview</h3>
+</section>
+<div class="analytics">
+  <div class="analytic">
+      <div class="analytic-icon">
+          <span class="fas fa-chalkboard-teacher"></span>
+      </div>
+      <div class="analytic-info">
+          <h4>Openings <a href="{% url 'openings' %}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-up-right-from-square"></i></a></h4>
+          <h1>{{ openings|length }}</h1>
+        </div>
+  </div>
+  <div class="analytic">
+    <div class="analytic-icon">
+      <span class="fas fa-book"></span>
+    </div>
+    <div class="analytic-info">
+      <h4>Openings APPL. <a href="#openingsApplData"><i class="fa-solid fa-up-right-from-square transform-angle-135"></i></a></h4>
+      <h1>{{ applied_openings_count|length }} <small class="text-success">1% <i class="fa-solid fa-arrow-trend-up"></i></small></h1>
+    </div>
+  </div>
+  <div class="analytic">
+    <div class="analytic-icon">
+        <span class="fas fa-user-graduate"></span>
+    </div>
+    <div class="analytic-info">
+        <h4>Admissions <span class="admission_status">active</span> </h4>
+        <h1>{{ admissions|length }}</h1>
+    </div>
+  </div>
+  <div class="analytic">
+    <div class="analytic-icon">
+        <span class="fas fa-swatchbook"></span>
+    </div>
+    <div class="analytic-info">
+        <h4>ADMIS. APPL. <a href="#openingsApplData"><i class="fa-solid fa-up-right-from-square transform-angle-135"></i></a></h4>
+        <h1>{{ applied_admissions|length }} <small class="text-danger">0% <i class="fa-solid fa-arrow-trend-down"></i></small></h1>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block manage-adops %}
+
+<div class="btn-area">
+  <button class="add-opening" onclick="document.location='{% url 'add_openings' %}'">Add opening</button>
+  <button id="bulkOpeningForm" class="add-opening">Bulk openings</button>
+  <button class="add-admission">Add admission</button>
+  <button id="bulkAdmissionForm" class="add-admission">Bulk admissions</button>
+</div>
+
+<section>
+  <h3 class="section-head">Openings Info.</h3>
+</section>
+
+<div class="job-cards">
+  {% for eachopening in applied_openings %}
+  <div class="job-card job-id" id="{{ eachopening.id }}">
+    <div class="job-card-header">
+    <svg viewBox="0 -13 512 512" xmlns="http://www.w3.org/2000/svg" style="background-color:#2e2882">
+      <g fill="#feb0a5">
+      <path d="M256 92.5l127.7 91.6L512 92 383.7 0 256 91.5 128.3 0 0 92l128.3 92zm0 0M256 275.9l-127.7-91.5L0 276.4l128.3 92L256 277l127.7 91.5 128.3-92-128.3-92zm0 0" />
+      <path d="M127.7 394.1l128.4 92 128.3-92-128.3-92zm0 0" />
+      </g>
+      <path d="M512 92L383.7 0 256 91.5v1l127.7 91.6zm0 0M512 276.4l-128.3-92L256 275.9v1l127.7 91.5zm0 0M256 486.1l128.4-92-128.3-92zm0 0" fill="#feb0a5" />
+    </svg>
+    </div>
+    <div class="job-card-title">{{ eachopening.job }}</div>
+    <div class="job-card-subtitle">
+      {{ eachopening.description }}
+    </div>
+    <div class="job-detail-buttons">
+    <button class="search-buttons detail-button">{{ eachopening.type }}</button>
+    <button class="search-buttons detail-button">Min. {{ eachopening.min_experience }} Year</button>
+    <button class="search-buttons detail-button">{{ eachopening.qualification }}</button>
+    <button class="search-buttons detail-button applicant-count-info">{{ eachopening.applied.all|length }} Appl.</button>
+    </div>
+    <div class="job-card-buttons">
+      <a href="{% url 'applicantsInfo' eachopening.id %}" class="search-buttons card-buttons-msg know-more" target="_blank" rel="noopener noreferrer">View Applicant{{ eachopening.applied.all|length|pluralize }} <i class="fa-solid fa-up-right-from-square"></i> </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+<div id="openingsApplData">
+  {% for i in openings %}
+  {{ i.job }}
+  <br>
+  <h4>Applicants - Count: {{ i.applied.all|length }}</h4>
+      {% for j in i.applied.all %}
+      {{ j.username }} - {{ j.first_name }} {{ j.last_name }}
+      <br>
+      {% endfor %}
+      <hr>
+  {% endfor %}
+</div>

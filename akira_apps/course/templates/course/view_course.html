@@ -6,11 +6,119 @@
 {% block content %}
 
 {% block analytics-text %}
-<h1>{{ course.course_code }}</h1>
-<p>{{ course.course_name }} ({{ course.course_name|first_letter_word }})</p>
+<h1>{{ course.code }}</h1>
+<p>{{ course.name }} ({{ course.name|first_letter_word }})</p>
 {% endblock %}
 
 {% block view-course %}
+
+{% comment %}
+<style>
+.clearfix:before,
+.clearfix:after {
+	content: " ";
+	display: table;
+}
+
+.clearfix:after {
+	clear: both;
+}
+
+/* body {
+	font-family: sans-serif;
+	background: #f6f9fa;
+} */
+
+/*Fun begins*/
+.tab_container {
+	width: 90%;
+	margin: 0 auto;
+	padding-top: 70px;
+	position: relative;
+}
+
+input[type="radio"], .tab-section {
+  clear: both;
+  padding-top: 10px;
+  display: none;
+}
+
+.tab-labels {
+  font-weight: 700;
+  font-size: 18px;
+  display: block;
+  float: left;
+  width: 20%;
+  padding: 1.5em;
+  color: #757575;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+  background: #f0f0f0;
+}
+
+#tab1:checked ~ #content1,
+#tab2:checked ~ #content2,
+#tab3:checked ~ #content3,
+#tab4:checked ~ #content4,
+#tab5:checked ~ #content5,
+#tab6:checked ~ #content6 {
+  display: block;
+  padding: 20px;
+  background: #fff;
+  color: #999;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.tab_container .tab-content p,
+.tab_container .tab-content h3 {
+  -webkit-animation: fadeInScale 0.7s ease-in-out;
+  -moz-animation: fadeInScale 0.7s ease-in-out;
+  animation: fadeInScale 0.7s ease-in-out;
+}
+.tab_container .tab-content h3  {
+  text-align: center;
+}
+
+.tab_container [id^="tab"]:checked + .tab-labels {
+  background: #fff;
+  box-shadow: inset 0 3px #0CE;
+}
+
+.tab_container [id^="tab"]:checked + .tab-labels .fa {
+  color: #0CE;
+}
+
+.tab-labels .fa {
+  font-size: 1.3em;
+  margin: 0 0.4em 0 0;
+}
+
+/*Media query*/
+@media only screen and (max-width: 900px) {
+  .tab-labels span {
+    display: none;
+  }
+  
+  .tab_container {
+    width: 98%;
+  }
+}
+
+/*Content Animation*/
+@keyframes fadeInScale {
+  0% {
+  	transform: scale(0.9);
+  	opacity: 0;
+  }
+  
+  100% {
+  	transform: scale(1);
+  	opacity: 1;
+  }
+}
+</style>
+{% endcomment %}
 
 <style>
 {% for i in courseComponent %}
@@ -67,37 +175,6 @@
 <br>
 <h4>Action</h4>
 <a href="{% url 'delete_course' course.id %}">Delete Course</a>
-
-<!-- <hr>
-
-{% for i in courseComponent %}
-{{ i.name }} | {{ i.desc }} <br>
-{% endfor %}
-
-<hr>
-
-{% for i in courseSubComponent %}
-{{ i.course.course_name }} | {{ i.component.name }} | {{ i.name }} | {{ i.desc }} <br>
-{% endfor %}
-
-<hr> -->
-
-<!-- {% for i in courseTask %}
-<p>{{ i.question }}</p>
-<form action="{% url 'task_answer' %}" method="POST" enctype="multipart/form-data">
-    {% csrf_token %}
-    <input type="hidden" name="course" id="id_course" value="{{ course.id }}" required>
-    <input type="hidden" name="component" id="id_component" value="{{ i.component.id }}" required>
-    <input type="hidden" name="subcomponent" id="id_subcomponent" value="{{ i.sub_component.id }}" required>
-    <input type="hidden" name="task" id="id_task" value="{{ i.id }}" required>
-    <input type="file" name="answer" id="id_answer" required>
-    <input type="submit">
-</form>
-{% endfor %} -->
-
-<!-- {% for i in taskAnswer %}
-{{ i.answer }} <br>
-{% endfor %} -->
 
 <div class="tab_container">
     {% for i in courseComponent %}
@@ -167,7 +244,6 @@
             <input type="submit">
         </form>
     </section>
-
 </div>
 
 <script>
@@ -191,7 +267,6 @@
         });
     });
   </script>
-
 {% endblock %}
 
 {% endblock %}

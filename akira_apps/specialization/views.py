@@ -8,8 +8,7 @@ from django.db.models import Q
 from datetime import datetime
 
 from akira_apps.super_admin.decorators import allowed_users
-from akira_apps.academic.models import (Semester)
-from akira_apps.academic.forms import (BranchForm)
+from akira_apps.academic.models import (Semester, Branch)
 from akira_apps.course.models import (CourseMC)
 from .models import (SpecializationsMC, SpecializationFiles)
 from akira_apps.academic_registration.models import (SpecEnrollStudent)
@@ -20,7 +19,7 @@ def manage_specializations(request):
     specializations = SpecializationsMC.objects.all()
     courses = CourseMC.objects.all()
     faculty_list = User.objects.all()
-    branch_list = BranchForm()
+    branch_list = Branch.objects.all()
     semester_list = Semester.objects.all()
     try:
         specEnrolledCurrentUserObj = SpecEnrollStudent.objects.get(user = request.user)
@@ -79,7 +78,7 @@ def view_specialization(request, specialization_name):
     specializationObj = SpecializationsMC.objects.get(specialization_name=specialization_name)
     specializationFilesObjs = SpecializationFiles.objects.filter(specialization = specializationObj)
     faculty_list = User.objects.all()
-    branch_list = BranchForm()
+    branch_list = Branch.objects.all()
     semester_list = Semester.objects.all()
     edit_course = False
     try:
