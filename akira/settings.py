@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'akira_apps.course.apps.CourseConfig',
     'akira_apps.specialization.apps.SpecializationConfig',
     'akira_apps.shigen.apps.ShigenConfig',
+    'akira_apps.adops.apps.AdopsConfig',
 
     'ckeditor',
     'ckeditor_uploader',
@@ -83,6 +84,8 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'akira_apps.authentication.middleware.filter_ip_middleware.FilterIPMiddleware',
     'akira_apps.authentication.middleware.userPageTracking_middleware.userPageTrackingMiddleware',
+    'akira_apps.authentication.middleware.userDeviceCookie_middleware.userDeviceCookieMiddleware',
+    'akira_apps.super_admin.middleware.isAdminExist_middleware.isAdminExistMiddleware',
 ]
 
 ROOT_URLCONF = 'akira.urls'
