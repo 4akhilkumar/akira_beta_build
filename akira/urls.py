@@ -40,6 +40,7 @@ urlpatterns = [
     path('specialization/', include('akira_apps.specialization.urls')),
     path('shigen/', include('akira_apps.shigen.urls')),
     path('adops/', include('akira_apps.adops.urls')),
+    path('', include('akira_apps.URLShortener.urls')),
 
     # path('ckeditor/', include('ckeditor_uploader.urls')),
     path('ckeditor/upload/', login_required(ckeditor_views.upload), name='ckeditor_upload'),

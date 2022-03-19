@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'akira_apps.specialization.apps.SpecializationConfig',
     'akira_apps.shigen.apps.ShigenConfig',
     'akira_apps.adops.apps.AdopsConfig',
+    'akira_apps.URLShortener.apps.UrlshortenerConfig',
 
     'ckeditor',
     'ckeditor_uploader',
@@ -226,3 +227,5 @@ ADMINS = [('Sai Akhil Kumar Reddy N', '4akhilkumar@gmail.com')]
 
 GOOGLE_RECAPTCHA_PUBLIC_KEY = config('GOOGLE_RECAPTCHA_PUBLIC_KEY')
 GOOGLE_RECAPTCHA_SECRET_KEY = config('GOOGLE_RECAPTCHA_SECRET_KEY')
+
+VIRUS_TOTAL_API_KEY = config('VIRUS_TOTAL_API_KEY')
