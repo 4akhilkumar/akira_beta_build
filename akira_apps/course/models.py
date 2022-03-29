@@ -27,7 +27,6 @@ class CourseMC(models.Model):
     specialization = models.ForeignKey(SpecializationsMC, on_delete=models.SET_NULL, blank=True, null=True)
     type = models.CharField(max_length = 50, choices = COURSE_TYPE, default=1)
     pre_requisite = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
-    extra_field = models.ForeignKey('CourseExtraFields', on_delete=models.SET_NULL, blank=True, null=True)
 
     def __str__(self):
         return '%s - %s' % (self.code, self.name)
@@ -82,7 +81,6 @@ class CourseComponent(models.Model):
 
 class CourseSubComponent(models.Model):
     id = models.UUIDField(primary_key = True, unique = True, default = uuid.uuid4, editable = False)
-    # course = models.ForeignKey(CourseMC, on_delete=models.CASCADE)
     component = models.ForeignKey(CourseComponent, on_delete=models.CASCADE)
     name = models.CharField(max_length = 100)
     desc = models.TextField(max_length = 500, null=True, blank=True)
@@ -92,8 +90,6 @@ class CourseSubComponent(models.Model):
 
 class CourseTask(models.Model):
     id = models.UUIDField(primary_key = True, unique = True, default = uuid.uuid4, editable = False)
-    # course = models.ForeignKey(CourseMC, on_delete=models.CASCADE)
-    # component = models.ForeignKey(CourseComponent, on_delete=models.CASCADE)
     sub_component = models.ForeignKey(CourseSubComponent, on_delete=models.CASCADE)
     question = models.TextField(max_length = 500)
     answer = models.ForeignKey('TaskAnswer', on_delete=models.SET_NULL, blank=True, null=True)
@@ -104,9 +100,6 @@ class CourseTask(models.Model):
 class TaskAnswer(models.Model):
     id = models.UUIDField(primary_key = True, unique = True, default = uuid.uuid4, editable = False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    # course = models.ForeignKey(CourseMC, on_delete=models.CASCADE)
-    # component = models.ForeignKey(CourseComponent, on_delete=models.CASCADE)
-    # sub_component = models.ForeignKey(CourseSubComponent, on_delete=models.CASCADE)
     task = models.ForeignKey(CourseTask, on_delete=models.CASCADE)
     answer = models.FileField(upload_to='TaskAnswerFiles/')
 

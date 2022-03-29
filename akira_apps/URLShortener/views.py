@@ -120,6 +120,7 @@ def shortURL(request):
     context = {
         'getShortedURLs': getShortedURLs,
         'shorterner_url_prefix': shorterner_url_prefix,
+        'protocol_current_domain': protocol + '://' + domain_name,
     }
     return render(request, 'URLShortener/shortURL.html', context)
 

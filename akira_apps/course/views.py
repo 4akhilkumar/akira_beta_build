@@ -55,30 +55,27 @@ def create_course(request):
         courseSpecializationObj = SpecializationsMC.objects.get(id=courseSpecialization_id)
         courseSemester = Semester.objects.get(id=courseSemester)
         courseFiles = request.FILES.getlist('course_files')
-        try:
-            CourseMC.objects.create(
-                code=courseCode,
-                name=courseName,
-                short_name=first_letter_word(courseName),
-                desc = courseDesc,
-                course_coordinator=courseCC,
-                branch=courseBranch,
-                semester=courseSemester,
-                specialization=courseSpecializationObj,
-                )
-            getCourseObj = CourseMC.objects.get(code = courseCode)
-            try:
-                for file in courseFiles:
-                    CourseFiles.objects.create(course = getCourseObj, course_files = file)
-                messages.success(request, "Course created successfully")
-            except Exception as e:
-                messages.error(request, e)
-            try:
-                pass
-            except Exception:
-                pass
-        except Exception as e:
-            messages.error(request, e)
+        print(courseFiles)
+        # try:
+        #     CourseMC.objects.create(
+        #         code=courseCode,
+        #         name=courseName,
+        #         short_name=first_letter_word(courseName),
+        #         desc = courseDesc,
+        #         course_coordinator=courseCC,
+        #         branch=courseBranch,
+        #         semester=courseSemester,
+        #         specialization=courseSpecializationObj,
+        #         )
+        #     getCourseObj = CourseMC.objects.get(code = courseCode)
+        #     try:
+        #         for file in courseFiles:
+        #             CourseFiles.objects.create(course = getCourseObj, course_files = file)
+        #         messages.success(request, "Course created successfully")
+        #     except Exception as e:
+        #         messages.error(request, e)
+        # except Exception as e:
+        #     messages.error(request, e)
     context = {
         "branch_list":branch_list,
         "semester_list":semester_list,
