@@ -1,5 +1,5 @@
 $('.course-btn').click(function() {
-    $(this).attr('disabled', true);
+    $(this).attr('disabled', '');
     $(this).val('Please wait...');
     $(this).closest('form').submit();
 });
