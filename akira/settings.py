@@ -119,12 +119,12 @@ WSGI_APPLICATION = 'akira.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 
 # #Change the default database to MYSQL Database
 # DATABASES = {
@@ -141,6 +141,16 @@ DATABASES = {
 #     }
 # }
 
+DATABASES = {
+        'default': {
+            'ENGINE': 'djongo',
+            'NAME': 'AkirA_DB',
+            'ENFORCE_SCHEMA': False,
+            'CLIENT': {
+                'host': 'mongodb+srv://4akhilkumar:MONGODBaccount_21@akiracluster.wrlna.mongodb.net/AkirA_DB?retryWrites=true&w=majority'
+            }  
+        }
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
