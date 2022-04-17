@@ -62,6 +62,7 @@ class Room(models.Model):
 class Branch(models.Model):
     id = models.UUIDField(primary_key = True, unique = True, default = uuid.uuid4, editable = False)
     name = models.CharField(max_length = 50, unique = True)
+    description = models.CharField(max_length = 500, blank = True, null = True)
 
     def __str__(self):
         return '%s' % (self.name)
@@ -78,7 +79,7 @@ class Semester(models.Model):
     mode = models.CharField(max_length = 4, choices = MODE, default = 1)
     start_year = models.DateField()
     end_year = models.DateField()
-    branch = models.ManyToManyField(Branch)
+    branch = models.ForeignKey(Branch, on_delete = models.CASCADE)
     is_active = models.BooleanField(default=False)
 
     def __str__(self):

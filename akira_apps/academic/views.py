@@ -11,9 +11,27 @@ from akira_apps.super_admin.decorators import allowed_users
 from .models import (Block, Floor, Room, Branch)
 from akira_apps.academic.forms import (RoomTypeForm)
 
-def getAllBranches(request):
+def getAllBranchesAjax(request):
     getBranches = Branch.objects.all()
     return JsonResponse(list(getBranches.values('id', 'name')), safe = False)
+
+def createbranchAjax(request):
+    if request.method == "POST":
+        name = request.POST.get('name')
+        desc = request.POST.get('desc')
+        if Branch.objects.filter(name__contains = name).exists() is False:
+            Branch.objects.create(name = name, description = desc)
+            message = "Branch %s created successfully!" % str(name)
+            status = "success"
+        else:
+            message = "Branch %s already exists!" % str(name)
+            status = "failed"
+        return JsonResponse({
+            'message': message,
+            'status': status
+            }, safe = False)
+    else:
+        return JsonResponse({'message': "Invalid request"}, safe = False)
 
 def add_branch(request):
     if request.method == "POST":

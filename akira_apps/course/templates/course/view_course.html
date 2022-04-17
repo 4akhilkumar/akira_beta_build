@@ -175,6 +175,7 @@ input[type="radio"], .tab-section {
 <br>
 <h4>Action</h4>
 <a href="{% url 'delete_course' course.id %}">Delete Course</a>
+<a href="{% url 'editCourse' course.code %}">Edit Course</a>
 
 <div class="tab_container">
     {% for i in courseComponent %}

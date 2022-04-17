@@ -9,4 +9,7 @@ urlpatterns = [
     path('fetch_semester/<semester_id>/', views.fetch_semester, name='fetch_semester'),
     path('update_semester_save/<semester_id>/', views.update_semester_save, name='update_semester_save'),
     path('delete_semester/<semester_id>/', views.delete_semester, name='delete_semester'),
+
+    path('createsemesterAjax/', views.createsemesterAjax, name='createsemesterAjax'),
+    path('getAllSemestersAjax/', views.getAllSemestersAjax, name='getAllSemestersAjax')
 ]
