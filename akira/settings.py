@@ -119,12 +119,12 @@ WSGI_APPLICATION = 'akira.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
 
 # #Change the default database to MYSQL Database
 # DATABASES = {
@@ -141,16 +141,16 @@ WSGI_APPLICATION = 'akira.wsgi.application'
 #     }
 # }
 
-DATABASES = {
-        'default': {
-            'ENGINE': 'djongo',
-            'NAME': 'AkirA_DB',
-            'ENFORCE_SCHEMA': False,
-            'CLIENT': {
-                'host': 'mongodb+srv://4akhilkumar:MONGODBaccount_21@akiracluster.wrlna.mongodb.net/AkirA_DB?retryWrites=true&w=majority'
-            }  
-        }
-}
+# DATABASES = {
+#         'default': {
+#             'ENGINE': 'djongo',
+#             'NAME': 'AkirA_DB',
+#             'ENFORCE_SCHEMA': False,
+#             'CLIENT': {
+#                 'host': 'mongodb+srv://4akhilkumar:MONGODBaccount_21@akiracluster.wrlna.mongodb.net/AkirA_DB?retryWrites=true&w=majority'
+#             }  
+#         }
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
@@ -228,8 +228,8 @@ SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_AGE = 14400
 SESSION_COOKIE_HTTPONLY = True
 PASSWORD_RESET_TIMEOUT_DAYS = 0.00694444
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = True
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# SECURE_SSL_REDIRECT = True
 CSRF_COOKIE_SECURE = True
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_PRELOAD = True
